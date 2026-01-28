@@ -1,0 +1,25 @@
+# Shadowd Configuration File
+# Copy this file to shadowd.yaml and update with your settings
+
+headscale:
+  # URL of your Headscale server
+  url: https://your-domain.com
+  # Pre-authentication key from Headscale
+  # Generate with: headscale preauthkeys create --expiration 24h
+  preauth_key: your-preauth-key-here
+
+ssh:
+  # SSH server port (default: 22)
+  port: 22
+  # Path to SSH host key file
+  host_key_path: /etc/shadowd/ssh_host_key
+
+grpc:
+  # gRPC server port (default: 50051)
+  port: 50051
+  # Enable TLS for gRPC (default: false)
+  tls_enabled: false
+
+device:
+  # Device name (will be displayed in the mobile app)
+  name: MyComputer

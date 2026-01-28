@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package device;
+
+option go_package = "github.com/shadow-shuttle/shadowd/proto;device";
+
+// DeviceService provides device information and pairing functionality
+service DeviceService {
+  // GetDeviceInfo returns information about this device
+  rpc GetDeviceInfo(Empty) returns (DeviceInfo);
+  
+  // GeneratePairingCode generates a pairing code for QR code scanning
+  rpc GeneratePairingCode(Empty) returns (PairingCode);
+  
+  // HealthCheck returns the health status of the daemon
+  rpc HealthCheck(Empty) returns (HealthStatus);
+}
+
+// Empty message for requests with no parameters
+message Empty {}
+
+// DeviceInfo contains information about a device
+message DeviceInfo {
+  string id = 1;
+  string name = 2;
+  string os = 3;
+  string os_version = 4;
+  string mesh_ip = 5;
+  string public_key = 6;
+  bool is_online = 7;
+  int64 last_seen = 8;  // Unix timestamp
+  int32 ssh_port = 9;
+  int32 grpc_port = 10;
+}
+
+// PairingCode contains data for device pairing via QR code
+message PairingCode {
+  string device_id = 1;
+  string device_name = 2;
+  string mesh_ip = 3;
+  string public_key = 4;
+  int64 timestamp = 5;  // Unix timestamp
+}
+
+// HealthStatus represents the health status of the daemon
+message HealthStatus {
+  string status = 1;  // "healthy", "degraded", "unhealthy"
+  int64 uptime = 2;   // Uptime in seconds
+  bool connected = 3; // Connected to Headscale
+  int64 last_check = 4; // Unix timestamp
+}

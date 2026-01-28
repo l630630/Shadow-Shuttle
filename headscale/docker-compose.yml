@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  headscale:
+    image: headscale/headscale:latest
+    container_name: headscale
+    volumes:
+      - ./config:/etc/headscale
+      - ./data:/var/lib/headscale
+    ports:
+      # HTTP API and Web UI
+      - "8080:8080"
+      # Metrics endpoint
+      - "9090:9090"
+      # gRPC endpoint
+      - "50443:50443"
+    restart: unless-stopped
+    command: serve
+    networks:
+      - headscale-network
+
+networks:
+  headscale-network:
+    driver: bridge

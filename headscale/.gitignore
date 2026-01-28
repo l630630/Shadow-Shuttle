@@ -1,0 +1,33 @@
+# Headscale data and configuration
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Sensitive configuration
+config/config.yaml
+config/acl.yaml
+.env
+
+# Logs
+*.log
+
+# Backups
+*.tar.gz
+*.zip
+backup/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/

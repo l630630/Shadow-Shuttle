@@ -1,0 +1,142 @@
+# Headscale ACL Configuration Example
+# This file defines access control policies for the Shadow Shuttle mesh network
+
+# Define groups of users
+groups:
+  # Administrators have full access
+  group:admins:
+    - admin@example.com
+    - sysadmin@example.com
+  
+  # Regular users
+  group:users:
+    - user1@example.com
+    - user2@example.com
+  
+  # Developers
+  group:developers:
+    - dev1@example.com
+    - dev2@example.com
+
+# Define tags for devices
+tagOwners:
+  # Production servers
+  tag:production:
+    - group:admins
+  
+  # Development servers
+  tag:development:
+    - group:developers
+    - group:admins
+  
+  # Personal devices
+  tag:personal:
+    - group:users
+    - group:admins
+
+# Define hosts (optional)
+hosts:
+  production-db: 100.64.0.10
+  dev-server: 100.64.0.20
+
+# Access Control Lists
+acls:
+  # Rule 1: Admins can access everything
+  - action: accept
+    src:
+      - group:admins
+    dst:
+      - "*:*"
+  
+  # Rule 2: Users can access their own devices
+  - action: accept
+    src:
+      - group:users
+    dst:
+      - tag:personal:*
+  
+  # Rule 3: Developers can access development servers
+  - action: accept
+    src:
+      - group:developers
+    dst:
+      - tag:development:*
+  
+  # Rule 4: Allow SSH access (port 22)
+  - action: accept
+    src:
+      - group:users
+      - group:developers
+    dst:
+      - "*:22"
+  
+  # Rule 5: Allow gRPC access (port 50051)
+  - action: accept
+    src:
+      - group:users
+      - group:developers
+    dst:
+      - "*:50051"
+  
+  # Rule 6: Deny all other traffic (default deny)
+  - action: deny
+    src:
+      - "*"
+    dst:
+      - "*:*"
+
+# SSH access rules
+ssh:
+  # Allow SSH with specific users
+  - action: accept
+    src:
+      - group:admins
+    dst:
+      - "*:22"
+    users:
+      - root
+      - admin
+  
+  - action: accept
+    src:
+      - group:users
+    dst:
+      - tag:personal:22
+    users:
+      - autogroup:nonroot
+
+# Auto-approve routes (optional)
+autoApprovers:
+  # Auto-approve routes for admins
+  routes:
+    10.0.0.0/8:
+      - group:admins
+    
+    192.168.0.0/16:
+      - group:admins
+
+# Test rules (optional)
+tests:
+  - src: admin@example.com
+    accept:
+      - production-db:22
+      - dev-server:22
+  
+  - src: user1@example.com
+    accept:
+      - tag:personal:22
+      - tag:personal:50051
+    deny:
+      - production-db:22
+
+# Notes:
+# 1. To enable this ACL, uncomment the acl_policy_path in config.yaml:
+#    acl_policy_path: /etc/headscale/acl.yaml
+#
+# 2. Rename this file to acl.yaml to use it
+#
+# 3. After modifying ACL, reload Headscale:
+#    docker-compose restart headscale
+#
+# 4. Test ACL rules:
+#    docker-compose exec headscale headscale policy check

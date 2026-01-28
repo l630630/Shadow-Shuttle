@@ -1,0 +1,66 @@
+# Binaries
+shadowd/shadowd
+shadowd/*.log
+shadowd/*.pid
+
+# Test files
+shadowd/test_host_key
+shadowd/test_host_key.pub
+shadowd/test_client_key
+shadowd/test_client_key.pub
+shadowd/test_authorized_keys
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# React Native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Headscale data
+headscale/data/db.sqlite*
+headscale/data/*.key
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment
+.env
+.env.local
+.env.*.local

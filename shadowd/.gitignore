@@ -1,0 +1,34 @@
+# Binaries
+shadowd
+shadowd-linux
+shadowd-macos
+shadowd.exe
+
+# Configuration files (keep example)
+shadowd.yaml
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Go build cache
+*.test
+*.out
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# SSH keys
+ssh_host_key
+ssh_host_key.pub

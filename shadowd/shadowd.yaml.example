@@ -1,0 +1,34 @@
+# Shadowd Configuration File Example
+
+headscale:
+  # URL of the Headscale server
+  url: https://headscale.example.com
+  
+  # Pre-authentication key for device registration
+  # Generate this key using: headscale preauthkeys create --expiration 24h
+  preauth_key: your-preauth-key-here
+
+ssh:
+  # SSH server port (default: 22)
+  port: 22
+  
+  # Path to SSH host key file
+  host_key_path: /etc/shadowd/ssh_host_key
+  
+  # Path to authorized_keys file for public key authentication
+  authorized_keys_path: /etc/shadowd/authorized_keys
+  
+  # Allowed networks (CIDR notation) - only Mesh network by default
+  allowed_networks:
+    - 100.64.0.0/10
+
+grpc:
+  # gRPC server port (default: 50051)
+  port: 50051
+  
+  # Enable TLS for gRPC (default: false)
+  tls_enabled: false
+
+device:
+  # Device name (will be displayed in Headscale and mobile app)
+  name: MyComputer
