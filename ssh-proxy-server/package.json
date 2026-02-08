@@ -1,0 +1,20 @@
+{
+  "name": "ssh-proxy-server",
+  "version": "1.0.0",
+  "description": "WebSocket SSH Proxy for Shadow Shuttle",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["ssh", "websocket", "proxy"],
+  "author": "Shadow Shuttle Team",
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.16.0",
+    "ssh2": "^1.15.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}

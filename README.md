@@ -36,93 +36,50 @@ Shadow Shuttle 是一个基于私有 Mesh 网络的安全 SSH 访问系统，让
 └────────┬────────┘  - 设备发现
          │           - SSH 终端
          │
+         ▼ WebSocket (8022)
+┌─────────────────┐
+│  Shadowd        │  Go 守护进程
+│  Daemon         │  - SSH 服务器 (2222)
+│                 │  - WebSocket SSH 代理 (8022)
+│                 │  - gRPC 接口 (50052)
+└────────┬────────┘  - 系统服务
+         │
          ▼
 ┌─────────────────┐
 │  Headscale      │  协调服务器
 │  Server         │  - Mesh 网络管理
-└────────┬────────┘  - 设备注册
-         │           - DERP 中继
-         │
-         ▼
-┌─────────────────┐
-│  Shadowd        │  Go 守护进程
-│  Daemon         │  - SSH 服务器
-└─────────────────┘  - gRPC 接口
-                     - 系统服务
+└─────────────────┘  - 设备注册
+                     - DERP 中继
 ```
 
 ## 🚀 快速开始
 
-> **🎉 演示模式现已可用！** 无需 WireGuard 配置，使用 localhost 即可立即体验所有功能。
-
-### 演示模式（推荐用于测试和演示）
-
-```bash
-# 启动所有服务
-./start-demo.sh
-
-# 测试 SSH 连接
-ssh -i shadowd/test_client_key -p 2222 test@127.0.0.1
-
-# 停止所有服务
-./stop-demo.sh
-```
-
-演示模式特点：
-- ✅ 无需 root 权限
-- ✅ 无需 WireGuard 配置
-- ✅ 所有功能可演示
-- ✅ 快速启动和停止
-
-详细说明请参考 [演示模式成功报告](DEMO_MODE_SUCCESS.md)
-
----
-
-### 方式 1: 自动部署（推荐）
-
-```bash
-# 克隆项目
-git clone <your-repo>
-cd shadow-shuttle
-
-# 运行快速启动脚本
-./mvp-quickstart.sh
-```
-
-脚本会自动：
-- ✅ 检查依赖
-- ✅ 部署 Headscale 服务器
-- ✅ 构建 Shadowd 守护进程
-- ✅ 配置系统
-- ✅ 安装移动端依赖
-
-### 方式 2: 手动部署
-
-#### 1. 部署 Headscale 服务器
-
-```bash
-cd headscale
-./scripts/deploy.sh
-```
-
-#### 2. 构建并运行 Shadowd
+### 1. 启动 Shadowd 守护进程
 
 ```bash
 cd shadowd
-go build -o shadowd .
 ./shadowd -config shadowd.yaml
 ```
 
-#### 3. 运行移动端应用
+Shadowd 将启动以下服务：
+- SSH Server (端口 2222)
+- WebSocket SSH 代理 (端口 8022)
+- gRPC Server (端口 50052)
+
+### 2. 运行移动应用
 
 ```bash
 cd mobile-app
 npm install
-npm run ios    # iOS
-npm run android # Android
+
+# Android
+npm run android
+
+# iOS
+npm run ios
 ```
 
-详细步骤请参考 [MVP 部署指南](MVP_DEPLOYMENT_GUIDE.md)
+详细步骤请参考 [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## 📱 移动端使用
 
@@ -145,22 +102,11 @@ npm run android # Android
 
 ## 📚 文档
 
-### 用户文档
-- [MVP 部署指南](MVP_DEPLOYMENT_GUIDE.md) - 快速部署和演示
-- [MVP 演示脚本](MVP_DEMO_SCRIPT.md) - 完整的演示流程
-- [Headscale 快速入门](headscale/QUICKSTART.md) - Headscale 使用指南
-- [Shadowd 安装指南](shadowd/INSTALL.md) - Shadowd 详细安装步骤
-
-### 开发文档
-- [项目完成总结](SHADOW_SHUTTLE_COMPLETION.md) - 项目整体情况
-- [M1+M2 集成测试报告](M1_M2_INTEGRATION_TEST_REPORT.md) - 后端测试结果
-- [M3 实现总结](mobile-app/M3_IMPLEMENTATION_SUMMARY.md) - 网络连接模块
-- [M4 实现总结](mobile-app/M4_IMPLEMENTATION_SUMMARY.md) - 终端模块
-
-### 组件文档
-- [Headscale README](headscale/README.md)
-- [Shadowd README](shadowd/README.md)
-- [Mobile App README](mobile-app/README.md)
+- [部署指南](DEPLOYMENT.md) - 快速部署和配置
+- [贡献指南](CONTRIBUTING.md) - 如何参与项目开发
+- [Headscale 文档](headscale/README.md) - Headscale 服务器配置
+- [Shadowd 文档](shadowd/README.md) - Shadowd 守护进程说明
+- [移动端文档](mobile-app/README.md) - 移动应用开发指南
 
 ## 🔒 安全特性
 
@@ -204,63 +150,42 @@ npm run android # Android
 
 ## 📊 项目状态
 
-### 当前版本: 0.1.0 (MVP)
-
-**完成度**: 96% ✅
-
-**演示模式**: ✅ 可用
+### 当前版本: 0.2.0
 
 | 模块 | 状态 | 完成度 |
 |------|------|--------|
-| M1: Headscale 服务器 | ✅ 完成 | 100% |
-| M2: Shadowd 守护进程 | ✅ 完成 | 98% |
-| M3: 移动端网络连接 | ✅ 完成 | 100% |
-| M4: 移动端终端 | ✅ 完成 | 100% |
-
-### 最新进展 (2026-01-28)
-
-- ✅ **演示模式实现** - 使用 localhost 可立即运行
-- ✅ **SSH 服务器** - 认证和连接成功
-- ✅ **gRPC 服务器** - 正常监听
-- ✅ **测试通过率** - 94.3% (33/35)
-- ✅ **移动端依赖** - 已安装 (947 packages)
-
-详细状态请查看 [最终状态报告](FINAL_STATUS.md)
-
-### 已知限制
-
-- ⚠️ WireGuard 使用占位符实现
-- ⚠️ 移动端 SSH 使用模拟连接
-- ⚠️ QR 扫描使用测试按钮
-- ⚠️ 安全存储使用占位符
-
-这些功能在 MVP 中使用占位符实现，后续版本将集成实际的原生模块。
+| Shadowd WebSocket 代理 | ✅ 完成 | 100% |
+| 移动端 SSH 终端 | ✅ 完成 | 100% |
+| WebSocket 连接 | ✅ 完成 | 100% |
+| 密码认证 | ✅ 完成 | 100% |
+| 设备管理 | 🚧 开发中 | 80% |
+| VPN 集成 | 📋 计划中 | 0% |
 
 ## 🗺️ 路线图
 
-### Phase 1: 原生集成 (2-4 周)
-- [ ] 集成 WireGuard 库
-- [ ] 集成 SSH 客户端
-- [ ] 集成 QR 扫描
-- [ ] 集成安全存储
+### Phase 1: 核心功能 ✅
+- [x] Shadowd WebSocket SSH 代理
+- [x] 移动端终端界面
+- [x] 密码认证
+- [x] 实时命令执行
 
-### Phase 2: 功能完善 (4-6 周)
-- [ ] 终端功能增强（复制粘贴、历史记录）
-- [ ] 设备管理优化（分组、搜索）
-- [ ] 性能优化
-- [ ] 错误处理完善
+### Phase 2: 功能增强 (进行中)
+- [ ] SSH 密钥认证
+- [ ] 设备分组管理
+- [ ] 命令历史记录
+- [ ] 文件传输 (SFTP)
 
-### Phase 3: 企业功能 (2-3 月)
+### Phase 3: VPN 集成 (计划中)
+- [ ] WireGuard 集成
+- [ ] Headscale 服务器集成
+- [ ] Mesh 网络支持
+- [ ] 设备自动发现
+
+### Phase 4: 企业功能 (未来)
 - [ ] 多用户管理
 - [ ] 权限控制
 - [ ] 审计日志
-- [ ] 集成第三方认证
-
-### Phase 4: 发布 (3-6 月)
-- [ ] 完整测试
-- [ ] 性能优化
-- [ ] 文档完善
-- [ ] App Store / Google Play 发布
+- [ ] 第三方认证集成
 
 ## 🤝 贡献
 

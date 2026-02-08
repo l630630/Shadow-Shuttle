@@ -1,19 +1,26 @@
 /**
  * QR Scanner Screen
- * Scans QR codes to pair new devices
+ * Scans QR codes to pair new devices using camera
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Alert,
   TouchableOpacity,
+  Linking,
+  Platform,
+  useColorScheme,
 } from 'react-native';
+import QRCodeScanner from 'react-native-qrcode-scanner';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useDeviceStore } from '../stores/deviceStore';
 import { getQRCodeService } from '../services/qrCodeService';
 import { createGRPCClient } from '../services/grpcClient';
+import { Header } from '../components/Header';
+import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
 
 interface QRScannerScreenProps {
   navigation: any;
@@ -21,112 +28,200 @@ interface QRScannerScreenProps {
 
 export const QRScannerScreen: React.FC<QRScannerScreenProps> = ({ navigation }) => {
   const [scanning, setScanning] = useState(true);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const { addDevice } = useDeviceStore();
   const qrService = getQRCodeService();
+  const isDarkMode = true; // 强制 Dark 模式
+  const themeColors = getThemeColors(isDarkMode);
   
-  const handleQRCodeScanned = async (data: string) => {
+  useEffect(() => {
+    checkCameraPermission();
+  }, []);
+  
+  const checkCameraPermission = async () => {
+    setHasPermission(true);
+  };
+  
+  const handleQRCodeScanned = async (e: any) => {
     if (!scanning) return;
     
     setScanning(false);
+    const data = e.data;
     
     try {
-      // Parse pairing code
       const pairingCode = qrService.parsePairingCode(data);
       
-      // Validate timestamp
       if (!qrService.validateTimestamp(pairingCode)) {
         Alert.alert(
-          'Invalid QR Code',
-          'This pairing code has expired. Please generate a new one.',
-          [{ text: 'OK', onPress: () => setScanning(true) }]
+          '二维码已过期',
+          '此配对码已过期，请重新生成',
+          [{ text: '确定', onPress: () => setScanning(true) }]
         );
         return;
       }
       
-      // Fetch device info via gRPC
       const grpcClient = createGRPCClient(pairingCode.meshIP, pairingCode.grpcPort);
       const deviceInfo = await grpcClient.getDeviceInfo();
-      
-      // Convert to device and add to store
       const device = qrService.pairingCodeToDevice(pairingCode, deviceInfo);
       await addDevice(device);
       
       Alert.alert(
-        'Device Added',
-        `Successfully paired with ${device.name}`,
-        [{ text: 'OK', onPress: () => navigation.goBack() }]
+        '设备已添加',
+        `成功配对 ${device.name}`,
+        [{ text: '确定', onPress: () => navigation.goBack() }]
       );
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to pair device';
+      const errorMessage = error instanceof Error ? error.message : '配对失败';
       Alert.alert(
-        'Pairing Failed',
+        '配对失败',
         errorMessage,
-        [{ text: 'Retry', onPress: () => setScanning(true) }]
+        [{ text: '重试', onPress: () => setScanning(true) }]
       );
     }
   };
   
-  // Placeholder for actual QR scanner
-  // In real implementation, use react-native-qrcode-scanner
   const handleManualTest = () => {
-    const testQRData = JSON.stringify({
-      deviceId: `device-${Date.now()}`,
-      meshIP: '100.64.0.2',
-      sshPort: 22,
-      grpcPort: 50051,
-      publicKey: 'test_public_key',
-      timestamp: Date.now(),
-      signature: 'test_signature',
-    });
-    
-    handleQRCodeScanned(testQRData);
+    const testQRData = `shadow://pair?deviceId=device-${Date.now()}&meshIP=100.64.0.2&sshPort=22&grpcPort=50052&publicKey=test_public_key&timestamp=${Date.now()}&signature=test_signature`;
+    handleQRCodeScanned({ data: testQRData });
   };
+  
+  if (hasPermission === null) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <Header
+          title="扫描二维码"
+          showBack
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.centerContent}>
+          <Icon name="camera" size={64} color={themeColors.textSecondary} />
+          <Text style={[styles.message, { color: themeColors.textPrimary }]}>
+            正在请求相机权限...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+  
+  if (hasPermission === false) {
+    return (
+      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <Header
+          title="扫描二维码"
+          showBack
+          onBack={() => navigation.goBack()}
+        />
+        <View style={styles.centerContent}>
+          <Icon name="camera-off" size={64} color={colors.error} />
+          <Text style={[styles.message, { color: themeColors.textPrimary }]}>
+            需要相机权限才能扫描二维码
+          </Text>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: colors.primary }]}
+            onPress={() => Linking.openSettings()}
+          >
+            <Icon name="settings" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+            <Text style={styles.buttonText}>打开设置</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.button, { backgroundColor: themeColors.surface }]}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-back" size={20} color={themeColors.textPrimary} style={styles.buttonIcon} />
+            <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>返回</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
   
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: 'rgba(0, 0, 0, 0.95)' }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.backButtonText}>← Back</Text>
+          <Icon name="arrow-back" size={24} color={colors.primary} />
+          <Text style={[styles.backButtonText, { color: colors.primary }]}>返回</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Scan QR Code</Text>
+        <Text style={[styles.title, { color: '#FFFFFF' }]}>扫描二维码</Text>
+        <Text style={[styles.subtitle, { color: '#CCCCCC' }]}>
+          将相机对准电脑上显示的二维码
+        </Text>
       </View>
       
-      <View style={styles.scannerContainer}>
-        <View style={styles.scannerFrame}>
-          <Text style={styles.scannerText}>
-            Point camera at device QR code
-          </Text>
-        </View>
-        
-        {/* Placeholder for actual scanner */}
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={handleManualTest}
-        >
-          <Text style={styles.testButtonText}>
-            Test with Mock Device
-          </Text>
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.instructions}>
-        <Text style={styles.instructionsTitle}>How to pair:</Text>
-        <Text style={styles.instructionsText}>
-          1. On the device you want to access, run:
-        </Text>
-        <Text style={styles.instructionsCode}>
-          shadowd generate-qr
-        </Text>
-        <Text style={styles.instructionsText}>
-          2. Scan the displayed QR code with this app
-        </Text>
-        <Text style={styles.instructionsText}>
-          3. The device will be added to your list
-        </Text>
-      </View>
+      <QRCodeScanner
+        onRead={handleQRCodeScanned}
+        reactivate={scanning}
+        reactivateTimeout={3000}
+        showMarker={true}
+        markerStyle={styles.marker}
+        cameraStyle={styles.camera}
+        topContent={<View />}
+        bottomContent={
+          <View style={[styles.actions, { backgroundColor: 'rgba(0, 0, 0, 0.95)' }]}>
+            <TouchableOpacity
+              style={[styles.testButton, { backgroundColor: colors.primary }]}
+              onPress={handleManualTest}
+              disabled={!scanning}
+            >
+              <Icon name="devices" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+              <Text style={styles.testButtonText}>
+                {scanning ? '使用测试设备' : '处理中...'}
+              </Text>
+            </TouchableOpacity>
+            
+            <View style={[styles.instructions, { borderTopColor: '#333' }]}>
+              <View style={styles.instructionHeader}>
+                <Icon name="info-outline" size={24} color={colors.primary} />
+                <Text style={[styles.instructionsTitle, { color: '#FFFFFF' }]}>
+                  配对步骤
+                </Text>
+              </View>
+              
+              <View style={styles.instructionStep}>
+                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.stepNumberText}>1</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                    在要访问的设备上运行：
+                  </Text>
+                  <View style={[styles.codeBlock, { backgroundColor: '#1A1A1A' }]}>
+                    <Icon name="terminal" size={16} color={colors.success} style={styles.codeIcon} />
+                    <Text style={[styles.instructionsCode, { color: colors.success }]}>
+                      shadowd generate-qr
+                    </Text>
+                  </View>
+                </View>
+              </View>
+              
+              <View style={styles.instructionStep}>
+                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.stepNumberText}>2</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                    用此应用扫描显示的二维码
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.instructionStep}>
+                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.stepNumberText}>3</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                    设备将被自动添加到列表中
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        }
+      />
     </View>
   );
 };
@@ -136,76 +231,135 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000000',
   },
+  centerContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+  },
   header: {
-    padding: 20,
-    backgroundColor: '#1A1A1A',
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
   },
   backButton: {
-    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
   backButtonText: {
-    color: '#2196F3',
-    fontSize: 16,
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.medium,
+    marginLeft: spacing.xs,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
   },
-  scannerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+  subtitle: {
+    fontSize: typography.fontSize.sm,
   },
-  scannerFrame: {
-    width: 280,
-    height: 280,
-    borderWidth: 2,
-    borderColor: '#2196F3',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scannerText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  message: {
+    fontSize: typography.fontSize.base,
     textAlign: 'center',
-    paddingHorizontal: 20,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  camera: {
+    height: 400,
+  },
+  marker: {
+    borderColor: colors.success,
+    borderWidth: 3,
+    borderRadius: borderRadius.xl,
+  },
+  actions: {
+    padding: spacing.lg,
   },
   testButton: {
-    marginTop: 40,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    backgroundColor: '#2196F3',
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    ...shadows.md,
   },
   testButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  button: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  buttonIcon: {
+    marginRight: spacing.xs,
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
   },
   instructions: {
-    padding: 20,
-    backgroundColor: '#1A1A1A',
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+  },
+  instructionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
   },
   instructionsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+    marginLeft: spacing.sm,
+  },
+  instructionStep: {
+    flexDirection: 'row',
+    marginBottom: spacing.lg,
+  },
+  stepNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: spacing.md,
+  },
+  stepNumberText: {
     color: '#FFFFFF',
-    marginBottom: 12,
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  stepContent: {
+    flex: 1,
   },
   instructionsText: {
-    fontSize: 14,
-    color: '#CCCCCC',
-    marginBottom: 8,
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.sm,
+    lineHeight: 20,
+  },
+  codeBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xs,
+  },
+  codeIcon: {
+    marginRight: spacing.sm,
   },
   instructionsCode: {
-    fontSize: 14,
-    color: '#4CAF50',
-    fontFamily: 'monospace',
-    backgroundColor: '#2A2A2A',
-    padding: 8,
-    borderRadius: 4,
-    marginBottom: 8,
+    fontSize: typography.fontSize.sm,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    flex: 1,
   },
 });

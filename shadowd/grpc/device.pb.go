@@ -42,6 +42,19 @@ type HealthStatus struct {
 	LastCheck int64  `json:"last_check"`
 }
 
+// ToolRequest represents a request to execute a named tool
+type ToolRequest struct {
+	ToolName string            `json:"tool_name"`
+	Args     map[string]string `json:"args"`
+}
+
+// ToolResponse represents the result of executing a tool
+type ToolResponse struct {
+	Success bool   `json:"success"`
+	Output  string `json:"output"`
+	Error   string `json:"error"`
+}
+
 // DeviceServiceServer is the server API for DeviceService
 type DeviceServiceServer interface {
 	GetDeviceInfo(context.Context, *Empty) (*DeviceInfo, error)
@@ -49,9 +62,43 @@ type DeviceServiceServer interface {
 	HealthCheck(context.Context, *Empty) (*HealthStatus, error)
 }
 
+// ToolServiceServer is the server API for ToolService
+type ToolServiceServer interface {
+	ExecuteTool(context.Context, *ToolRequest) (*ToolResponse, error)
+}
+
+// ToolServiceClient is the client API for ToolService
+type ToolServiceClient interface {
+	ExecuteTool(ctx context.Context, in *ToolRequest, opts ...grpc.CallOption) (*ToolResponse, error)
+}
+
+type toolServiceClient struct {
+	cc *grpc.ClientConn
+}
+
+// NewToolServiceClient creates a new ToolService client
+func NewToolServiceClient(cc *grpc.ClientConn) ToolServiceClient {
+	return &toolServiceClient{cc}
+}
+
+// ExecuteTool calls the ExecuteTool RPC
+func (c *toolServiceClient) ExecuteTool(ctx context.Context, in *ToolRequest, opts ...grpc.CallOption) (*ToolResponse, error) {
+	out := new(ToolResponse)
+	err := c.cc.Invoke(ctx, "/device.ToolService/ExecuteTool", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RegisterDeviceServiceServer registers the DeviceService server
 func RegisterDeviceServiceServer(s *grpc.Server, srv DeviceServiceServer) {
 	s.RegisterService(&_DeviceService_serviceDesc, srv)
+}
+
+// RegisterToolServiceServer registers the ToolService server
+func RegisterToolServiceServer(s *grpc.Server, srv ToolServiceServer) {
+	s.RegisterService(&_ToolService_serviceDesc, srv)
 }
 
 func _DeviceService_GetDeviceInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -123,6 +170,37 @@ var _DeviceService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "HealthCheck",
 			Handler:    _DeviceService_HealthCheck_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "proto/device.proto",
+}
+
+func _ToolService_ExecuteTool_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ToolRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ToolServiceServer).ExecuteTool(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/device.ToolService/ExecuteTool",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ToolServiceServer).ExecuteTool(ctx, req.(*ToolRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+var _ToolService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "device.ToolService",
+	HandlerType: (*ToolServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ExecuteTool",
+			Handler:    _ToolService_ExecuteTool_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

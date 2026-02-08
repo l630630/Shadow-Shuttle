@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
 	"time"
 
@@ -22,16 +23,22 @@ type Config struct {
 
 // Server represents the gRPC server
 type Server struct {
-	config     Config
-	log        *logrus.Logger
-	grpcServer *grpc.Server
-	listener   net.Listener
-	startTime  time.Time
-	deviceInfo *types.Device
+	config        Config
+	log           *logrus.Logger
+	grpcServer    *grpc.Server
+	listener      net.Listener
+	startTime     time.Time
+	deviceInfo    *types.Device
+	deviceService *deviceServiceImpl
 }
 
 // deviceServiceImpl implements the DeviceService gRPC interface
 type deviceServiceImpl struct {
+	server *Server
+}
+
+// toolServiceImpl implements the ToolService gRPC interface
+type toolServiceImpl struct {
 	server *Server
 }
 
@@ -69,7 +76,12 @@ func (s *Server) Start() error {
 	
 	// Register DeviceService
 	deviceService := &deviceServiceImpl{server: s}
+	s.deviceService = deviceService
 	RegisterDeviceServiceServer(s.grpcServer, deviceService)
+
+	// Register ToolService
+	toolService := &toolServiceImpl{server: s}
+	RegisterToolServiceServer(s.grpcServer, toolService)
 
 	s.log.WithField("address", addr).Info("Starting gRPC server")
 
@@ -98,6 +110,11 @@ func (s *Server) Stop() error {
 	return nil
 }
 
+// GetDeviceInfo returns information about this device (exported for HTTP API)
+func (s *Server) GetDeviceInfo(ctx context.Context, req *Empty) (*DeviceInfo, error) {
+	return s.deviceService.GetDeviceInfo(ctx, req)
+}
+
 // GetDeviceInfo returns information about this device
 func (d *deviceServiceImpl) GetDeviceInfo(ctx context.Context, req *Empty) (*DeviceInfo, error) {
 	d.server.log.Debug("GetDeviceInfo called")
@@ -118,6 +135,11 @@ func (d *deviceServiceImpl) GetDeviceInfo(ctx context.Context, req *Empty) (*Dev
 	}, nil
 }
 
+// GeneratePairingCode generates a pairing code for QR code scanning (exported for HTTP API)
+func (s *Server) GeneratePairingCode(ctx context.Context, req *Empty) (*PairingCode, error) {
+	return s.deviceService.GeneratePairingCode(ctx, req)
+}
+
 // GeneratePairingCode generates a pairing code for QR code scanning
 func (d *deviceServiceImpl) GeneratePairingCode(ctx context.Context, req *Empty) (*PairingCode, error) {
 	d.server.log.Debug("GeneratePairingCode called")
@@ -131,6 +153,11 @@ func (d *deviceServiceImpl) GeneratePairingCode(ctx context.Context, req *Empty)
 		PublicKey:  device.PublicKey,
 		Timestamp:  time.Now().Unix(),
 	}, nil
+}
+
+// HealthCheck returns the health status of the daemon (exported for HTTP API)
+func (s *Server) HealthCheck(ctx context.Context, req *Empty) (*HealthStatus, error) {
+	return s.deviceService.HealthCheck(ctx, req)
 }
 
 // HealthCheck returns the health status of the daemon
@@ -194,5 +221,46 @@ func getOSVersion() string {
 		return "Windows"
 	default:
 		return "Unknown"
+	}
+}
+
+// ExecuteTool executes a whitelisted tool on the device.
+// Phase 1: only support wechat.send630 -> bash ~/YS/mac-automation/send_wechat_message.sh "630" text
+func (t *toolServiceImpl) ExecuteTool(ctx context.Context, req *ToolRequest) (*ToolResponse, error) {
+	t.server.log.WithFields(logrus.Fields{
+		"tool": req.ToolName,
+		"args": req.Args,
+	}).Info("ExecuteTool called")
+
+	switch req.ToolName {
+	case "wechat.send630":
+		text := req.Args["text"]
+		if text == "" {
+			return &ToolResponse{
+				Success: false,
+				Error:   "missing args.text",
+			}, nil
+		}
+
+		scriptPath := "/Users/a0000/YS/mac-automation/send_wechat_message.sh"
+		cmd := exec.CommandContext(ctx, "bash", scriptPath, "630", text)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return &ToolResponse{
+				Success: false,
+				Output:  string(out),
+				Error:   err.Error(),
+			}, nil
+		}
+		return &ToolResponse{
+			Success: true,
+			Output:  string(out),
+		}, nil
+
+	default:
+		return &ToolResponse{
+			Success: false,
+			Error:   fmt.Sprintf("unknown tool: %s", req.ToolName),
+		}, nil
 	}
 }

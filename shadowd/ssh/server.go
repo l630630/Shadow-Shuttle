@@ -10,8 +10,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"sync"
 
+	"github.com/creack/pty"
 	"github.com/gliderlabs/ssh"
 	"github.com/sirupsen/logrus"
 	gossh "golang.org/x/crypto/ssh"
@@ -48,6 +50,9 @@ type Config struct {
 	
 	// AuthorizedKeysPath is the path to the authorized_keys file
 	AuthorizedKeysPath string
+	
+	// Users contains username -> password mappings for password authentication
+	Users map[string]string
 }
 
 // NewServer creates a new SSH server instance
@@ -214,18 +219,118 @@ func (s *Server) sessionHandler(sess ssh.Session) {
 
 // handleShell handles interactive shell sessions
 func (s *Server) handleShell(sess ssh.Session, isPty bool, winCh <-chan ssh.Window) {
-	// This is a simplified implementation
-	// In production, you would spawn a real shell process
-	io.WriteString(sess, "Welcome to Shadowd SSH Server\n")
-	io.WriteString(sess, "Interactive shell not yet implemented\n")
-	io.WriteString(sess, "Use command execution instead\n")
+	// Spawn a real shell process
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	
+	cmd := exec.Command(shell)
+	
+	// Set working directory to user's home directory
+	// Try multiple methods to get home directory
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			s.log.WithError(err).Warn("Failed to get user home directory, using current directory")
+		}
+	}
+	
+	if homeDir != "" {
+		cmd.Dir = homeDir
+		s.log.WithFields(logrus.Fields{
+			"home_dir": homeDir,
+			"shell":    shell,
+		}).Info("Setting shell working directory to home")
+	} else {
+		s.log.Warn("Home directory is empty, using current directory")
+	}
+	
+	// Set up PTY if requested
+	if isPty {
+		ptyReq, _, _ := sess.Pty()
+		cmd.Env = append(os.Environ(), fmt.Sprintf("TERM=%s", ptyReq.Term))
+		
+		// Create PTY
+		ptmx, err := pty.Start(cmd)
+		if err != nil {
+			s.log.WithError(err).Error("Failed to start PTY")
+			io.WriteString(sess, fmt.Sprintf("Failed to start shell: %v\n", err))
+			sess.Exit(1)
+			return
+		}
+		defer ptmx.Close()
+		
+		// Handle window size changes
+		go func() {
+			for win := range winCh {
+				pty.Setsize(ptmx, &pty.Winsize{
+					Rows: uint16(win.Height),
+					Cols: uint16(win.Width),
+				})
+			}
+		}()
+		
+		// Copy data between SSH session and PTY
+		go func() {
+			io.Copy(ptmx, sess)
+		}()
+		io.Copy(sess, ptmx)
+		
+		cmd.Wait()
+	} else {
+		// No PTY, use pipes
+		cmd.Stdin = sess
+		cmd.Stdout = sess
+		cmd.Stderr = sess.Stderr()
+		
+		if err := cmd.Run(); err != nil {
+			s.log.WithError(err).Error("Shell execution failed")
+			sess.Exit(1)
+			return
+		}
+	}
 }
 
 // handleCommand handles command execution
 func (s *Server) handleCommand(sess ssh.Session, cmd []string) {
-	// This is a simplified implementation
-	// In production, you would execute the actual command
-	io.WriteString(sess, fmt.Sprintf("Command execution not yet implemented: %v\n", cmd))
+	// Execute the command
+	command := exec.Command(cmd[0], cmd[1:]...)
+	command.Stdin = sess
+	command.Stdout = sess
+	command.Stderr = sess.Stderr()
+	
+	// Set working directory to user's home directory
+	homeDir := os.Getenv("HOME")
+	if homeDir == "" {
+		var err error
+		homeDir, err = os.UserHomeDir()
+		if err != nil {
+			s.log.WithError(err).Warn("Failed to get user home directory for command execution")
+		}
+	}
+	
+	if homeDir != "" {
+		command.Dir = homeDir
+		s.log.WithFields(logrus.Fields{
+			"home_dir": homeDir,
+			"command":  cmd,
+		}).Info("Setting command working directory to home")
+	}
+	
+	if err := command.Run(); err != nil {
+		s.log.WithError(err).WithField("command", cmd).Error("Command execution failed")
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			sess.Exit(exitErr.ExitCode())
+		} else {
+			sess.Exit(1)
+		}
+		return
+	}
+	
+	sess.Exit(0)
 }
 
 // publicKeyHandler handles public key authentication
@@ -252,9 +357,24 @@ func (s *Server) publicKeyHandler(ctx ssh.Context, key ssh.PublicKey) bool {
 	return false
 }
 
-// passwordHandler always denies password authentication
+// passwordHandler handles password authentication
+// Uses user accounts from configuration file
 func (s *Server) passwordHandler(ctx ssh.Context, password string) bool {
-	s.log.WithField("user", ctx.User()).Warn("Password authentication attempted but is disabled")
+	username := ctx.User()
+	
+	// Check if user exists in configuration
+	if validPassword, exists := s.config.Users[username]; exists {
+		if password == validPassword {
+			s.log.WithFields(logrus.Fields{
+				"user": username,
+			}).Info("Password authentication successful")
+			return true
+		}
+	}
+	
+	s.log.WithFields(logrus.Fields{
+		"user": username,
+	}).Warn("Password authentication failed: invalid credentials")
 	return false
 }
 

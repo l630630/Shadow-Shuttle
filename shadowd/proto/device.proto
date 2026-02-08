@@ -49,3 +49,24 @@ message HealthStatus {
   bool connected = 3; // Connected to Headscale
   int64 last_check = 4; // Unix timestamp
 }
+
+// ToolRequest represents a request to execute a named tool
+// Examples:
+// - tool_name: "wechat.send630", args: {"text": "2"}
+// - tool_name: "system.run", args: {"command": "npm test", "cwd": "/Users/a0000/YS/mobile-app"}
+message ToolRequest {
+  string tool_name = 1;
+  map<string, string> args = 2;
+}
+
+// ToolResponse represents the result of executing a tool
+message ToolResponse {
+  bool success = 1;
+  string output = 2;
+  string error = 3;
+}
+
+// ToolService executes whitelisted tools on the device
+service ToolService {
+  rpc ExecuteTool(ToolRequest) returns (ToolResponse);
+}

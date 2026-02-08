@@ -106,7 +106,69 @@ export class KeyStorageService {
   }
   
   /**
-   * Store device fingerprint for verification
+   * Store SSH password securely
+   * 安全存储 SSH 密码
+   */
+  async storePassword(deviceId: string, password: string): Promise<void> {
+    try {
+      // TODO: Implement actual secure storage using react-native-keychain or MMKV
+      // For now, use AsyncStorage (in production, use Keychain/KeyStore)
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.setItem(`ssh_password_${deviceId}`, password);
+      console.log(`Stored password for device ${deviceId}`);
+    } catch (error) {
+      throw new Error(
+        error instanceof Error ? error.message : 'Failed to store password'
+      );
+    }
+  }
+  
+  /**
+   * Retrieve SSH password from secure storage
+   * 从安全存储中获取 SSH 密码
+   */
+  async getPassword(deviceId: string): Promise<string | null> {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const password = await AsyncStorage.getItem(`ssh_password_${deviceId}`);
+      return password;
+    } catch (error) {
+      console.error('Failed to retrieve password:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Delete SSH password from secure storage
+   * 从安全存储中删除 SSH 密码
+   */
+  async deletePassword(deviceId: string): Promise<void> {
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      await AsyncStorage.removeItem(`ssh_password_${deviceId}`);
+      console.log(`Deleted password for device ${deviceId}`);
+    } catch (error) {
+      throw new Error(
+        error instanceof Error ? error.message : 'Failed to delete password'
+      );
+    }
+  }
+  
+  /**
+   * Check if password exists for device
+   * 检查设备是否有存储的密码
+   */
+  async hasPassword(deviceId: string): Promise<boolean> {
+    try {
+      const password = await this.getPassword(deviceId);
+      return password !== null && password.length > 0;
+    } catch (error) {
+      return false;
+    }
+  }
+  
+  /**
+   * Store device fingerprint
    */
   async storeFingerprint(deviceId: string, fingerprint: string): Promise<void> {
     try {

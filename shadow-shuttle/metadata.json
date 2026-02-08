@@ -1,0 +1,8 @@
+{
+  "name": "Shadow Shuttle",
+  "description": "A dark-themed server management dashboard with AI-powered command assistance and mesh network monitoring.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

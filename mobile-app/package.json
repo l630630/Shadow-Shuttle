@@ -4,21 +4,28 @@
   "private": true,
   "scripts": {
     "android": "react-native run-android",
+    "android:fast": "cd android && ./fast-build.sh && cd .. && adb install android/app/build/outputs/apk/debug/app-debug.apk && adb shell am start -n com.shadowshuttle/.MainActivity",
     "ios": "react-native run-ios",
     "start": "react-native start",
+    "start:reset": "react-native start --reset-cache",
     "test": "jest",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/netinfo": "^11.3.1",
+    "@react-native-voice/voice": "^3.2.4",
+    "expo-speech": "^14.0.8",
+    "fast-check": "^4.5.3",
     "react": "18.2.0",
     "react-native": "0.73.0",
-    "@react-navigation/native": "^6.1.9",
-    "@react-navigation/stack": "^6.3.20",
-    "zustand": "^4.4.7",
-    "@grpc/grpc-js": "^1.9.14",
-    "@react-native-async-storage/async-storage": "^1.21.0",
+    "react-native-linear-gradient": "^2.8.3",
+    "react-native-mmkv": "^2.12.2",
+    "react-native-permissions": "^5.4.4",
     "react-native-qrcode-scanner": "^1.5.5",
-    "react-native-ssh": "^1.0.0"
+    "react-native-vector-icons": "^10.3.0",
+    "react-native-zeroconf": "^0.14.0",
+    "zustand": "^5.0.10"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
@@ -28,6 +35,7 @@
     "@react-native/metro-config": "^0.73.0",
     "@react-native/typescript-config": "^0.73.0",
     "@types/react": "^18.2.6",
+    "@types/react-native-vector-icons": "^6.4.18",
     "@types/react-test-renderer": "^18.0.0",
     "babel-jest": "^29.2.1",
     "eslint": "^8.19.0",

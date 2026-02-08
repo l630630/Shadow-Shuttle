@@ -1,0 +1,147 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.shadowshuttle"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="21"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:3:5-67
+11-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:3:22-64
+12    <uses-permission android:name="android.permission.CAMERA" />
+12-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:4:5-65
+12-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:4:22-62
+13    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+13-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:5:5-86
+13-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:5:22-83
+14    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+14-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:6:5-76
+14-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:6:22-73
+15
+16    <uses-feature
+16-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:7:5-85
+17        android:name="android.hardware.camera"
+17-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:7:19-57
+18        android:required="false" />
+18-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:7:58-82
+19    <uses-feature
+19-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:8:5-95
+20        android:name="android.hardware.camera.autofocus"
+20-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:8:19-67
+21        android:required="false" />
+21-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:8:68-92
+22
+23    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+23-->[:react-native-community_netinfo] /Users/a0000/YS/mobile-app/node_modules/@react-native-community/netinfo/android/build/intermediates/merged_manifest/debug/AndroidManifest.xml:7:5-79
+23-->[:react-native-community_netinfo] /Users/a0000/YS/mobile-app/node_modules/@react-native-community/netinfo/android/build/intermediates/merged_manifest/debug/AndroidManifest.xml:7:22-76
+24    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+24-->[:react-native-voice_voice] /Users/a0000/YS/mobile-app/node_modules/@react-native-voice/voice/android/build/intermediates/merged_manifest/debug/AndroidManifest.xml:10:5-71
+24-->[:react-native-voice_voice] /Users/a0000/YS/mobile-app/node_modules/@react-native-voice/voice/android/build/intermediates/merged_manifest/debug/AndroidManifest.xml:10:22-68
+25    <!--
+26    This manifest file is used only by Gradle to configure debug-only capabilities
+27    for React Native Apps.
+28    -->
+29    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+29-->[com.facebook.react:react-android:0.73.0] /Users/a0000/.gradle/caches/transforms-3/0859cc2ebf96bc372b2c46ef5b293d59/transformed/jetified-react-android-0.73.0-debug/AndroidManifest.xml:16:5-78
+29-->[com.facebook.react:react-android:0.73.0] /Users/a0000/.gradle/caches/transforms-3/0859cc2ebf96bc372b2c46ef5b293d59/transformed/jetified-react-android-0.73.0-debug/AndroidManifest.xml:16:22-75
+30
+31    <permission
+31-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:22:5-24:47
+32        android:name="com.shadowshuttle.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+32-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:23:9-81
+33        android:protectionLevel="signature" />
+33-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:24:9-44
+34
+35    <uses-permission android:name="com.shadowshuttle.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+35-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:26:5-97
+35-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:26:22-94
+36
+37    <application
+37-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:10:5-31:19
+38        android:name="com.shadowshuttle.MainApplication"
+38-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:11:7-38
+39        android:allowBackup="false"
+39-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:15:7-34
+40        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+40-->[androidx.core:core:1.9.0] /Users/a0000/.gradle/caches/transforms-3/13659b94c66de92d98d7f8af61234b95/transformed/core-1.9.0/AndroidManifest.xml:28:18-86
+41        android:debuggable="true"
+42        android:extractNativeLibs="true"
+43        android:icon="@mipmap/ic_launcher"
+43-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:13:7-41
+44        android:label="@string/app_name"
+44-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:12:7-39
+45        android:networkSecurityConfig="@xml/network_security_config"
+45-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:17:7-67
+46        android:roundIcon="@mipmap/ic_launcher_round"
+46-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:14:7-52
+47        android:testOnly="true"
+48        android:theme="@style/AppTheme"
+48-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:18:7-38
+49        android:usesCleartextTraffic="true" >
+49-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:16:7-42
+50        <activity
+50-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:19:7-30:18
+51            android:name="com.shadowshuttle.MainActivity"
+51-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:20:9-37
+52            android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+52-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:22:9-118
+53            android:exported="true"
+53-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:25:9-32
+54            android:label="@string/app_name"
+54-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:21:9-41
+55            android:launchMode="singleTask"
+55-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:23:9-40
+56            android:windowSoftInputMode="adjustResize" >
+56-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:24:9-51
+57            <intent-filter>
+57-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:26:9-29:25
+58                <action android:name="android.intent.action.MAIN" />
+58-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:27:13-65
+58-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:27:21-62
+59
+60                <category android:name="android.intent.category.LAUNCHER" />
+60-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:28:13-73
+60-->/Users/a0000/YS/mobile-app/android/app/src/main/AndroidManifest.xml:28:23-70
+61            </intent-filter>
+62        </activity>
+63        <activity
+63-->[com.facebook.react:react-android:0.73.0] /Users/a0000/.gradle/caches/transforms-3/0859cc2ebf96bc372b2c46ef5b293d59/transformed/jetified-react-android-0.73.0-debug/AndroidManifest.xml:19:9-21:40
+64            android:name="com.facebook.react.devsupport.DevSettingsActivity"
+64-->[com.facebook.react:react-android:0.73.0] /Users/a0000/.gradle/caches/transforms-3/0859cc2ebf96bc372b2c46ef5b293d59/transformed/jetified-react-android-0.73.0-debug/AndroidManifest.xml:20:13-77
+65            android:exported="false" />
+65-->[com.facebook.react:react-android:0.73.0] /Users/a0000/.gradle/caches/transforms-3/0859cc2ebf96bc372b2c46ef5b293d59/transformed/jetified-react-android-0.73.0-debug/AndroidManifest.xml:21:13-37
+66
+67        <provider
+67-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:24:9-32:20
+68            android:name="androidx.startup.InitializationProvider"
+68-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:25:13-67
+69            android:authorities="com.shadowshuttle.androidx-startup"
+69-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:26:13-68
+70            android:exported="false" >
+70-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:27:13-37
+71            <meta-data
+71-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:29:13-31:52
+72                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+72-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:30:17-75
+73                android:value="androidx.startup" />
+73-->[androidx.emoji2:emoji2:1.2.0] /Users/a0000/.gradle/caches/transforms-3/faa3592d2fc203d6c74b9a5f601058a1/transformed/jetified-emoji2-1.2.0/AndroidManifest.xml:31:17-49
+74            <meta-data
+74-->[androidx.lifecycle:lifecycle-process:2.4.1] /Users/a0000/.gradle/caches/transforms-3/71b91ea8216105cda74b0317da307340/transformed/jetified-lifecycle-process-2.4.1/AndroidManifest.xml:31:13-33:52
+75                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+75-->[androidx.lifecycle:lifecycle-process:2.4.1] /Users/a0000/.gradle/caches/transforms-3/71b91ea8216105cda74b0317da307340/transformed/jetified-lifecycle-process-2.4.1/AndroidManifest.xml:32:17-78
+76                android:value="androidx.startup" />
+76-->[androidx.lifecycle:lifecycle-process:2.4.1] /Users/a0000/.gradle/caches/transforms-3/71b91ea8216105cda74b0317da307340/transformed/jetified-lifecycle-process-2.4.1/AndroidManifest.xml:33:17-49
+77        </provider>
+78
+79        <meta-data
+79-->[com.facebook.soloader:soloader:0.10.5] /Users/a0000/.gradle/caches/transforms-3/03d018e18e7118763cc731de8f689ba0/transformed/jetified-soloader-0.10.5/AndroidManifest.xml:12:9-14:37
+80            android:name="com.facebook.soloader.enabled"
+80-->[com.facebook.soloader:soloader:0.10.5] /Users/a0000/.gradle/caches/transforms-3/03d018e18e7118763cc731de8f689ba0/transformed/jetified-soloader-0.10.5/AndroidManifest.xml:13:13-57
+81            android:value="false" />
+81-->[com.facebook.soloader:soloader:0.10.5] /Users/a0000/.gradle/caches/transforms-3/03d018e18e7118763cc731de8f689ba0/transformed/jetified-soloader-0.10.5/AndroidManifest.xml:14:13-34
+82    </application>
+83
+84</manifest>

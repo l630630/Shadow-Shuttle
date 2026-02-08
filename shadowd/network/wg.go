@@ -120,8 +120,21 @@ func (wg *WireGuardManager) generateKeys() error {
 
 func (wg *WireGuardManager) registerWithHeadscale() error {
 	wg.log.WithFields(logrus.Fields{"headscale_url": wg.headscaleURL, "device_name": wg.deviceName}).Info("Registering with Headscale")
-	wg.meshIP = "100.64.0.1"
-	wg.log.WithField("mesh_ip", wg.meshIP).Info("Successfully registered with Headscale")
+	// NOTE: Development stub implementation.
+	// In real deployment this would call Headscale and obtain a real Mesh IP.
+	// For local development, use the local network IP instead of 127.0.0.1
+	// This allows mobile apps to connect via the local network
+	
+	localIP, err := GetPreferredLocalIP()
+	if err != nil {
+		wg.log.WithError(err).Warn("Failed to get local IP, falling back to 127.0.0.1")
+		wg.meshIP = "127.0.0.1"
+	} else {
+		wg.meshIP = localIP
+		wg.log.WithField("local_ip", localIP).Info("Using local network IP as Mesh IP (dev mode)")
+	}
+	
+	wg.log.WithField("mesh_ip", wg.meshIP).Info("Successfully registered with Headscale (dev mode)")
 	return nil
 }
 

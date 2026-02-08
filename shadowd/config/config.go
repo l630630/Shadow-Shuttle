@@ -13,12 +13,6 @@ type Config struct {
 	SSH       SSHConfig       `yaml:"ssh"`
 	GRPC      GRPCConfig      `yaml:"grpc"`
 	Device    DeviceConfig    `yaml:"device"`
-	DemoMode  *DemoModeConfig `yaml:"demo_mode,omitempty"`
-}
-
-// DemoModeConfig contains demo mode settings
-type DemoModeConfig struct {
-	UseLocalhost bool `yaml:"use_localhost"`
 }
 
 // HeadscaleConfig contains Headscale server connection settings
@@ -29,10 +23,11 @@ type HeadscaleConfig struct {
 
 // SSHConfig contains SSH server settings
 type SSHConfig struct {
-	Port               int      `yaml:"port"`
-	HostKeyPath        string   `yaml:"host_key_path"`
-	AuthorizedKeysPath string   `yaml:"authorized_keys_path"`
-	AllowedNetworks    []string `yaml:"allowed_networks"`
+	Port               int               `yaml:"port"`
+	HostKeyPath        string            `yaml:"host_key_path"`
+	AuthorizedKeysPath string            `yaml:"authorized_keys_path"`
+	AllowedNetworks    []string          `yaml:"allowed_networks"`
+	Users              map[string]string `yaml:"users"` // username -> password
 }
 
 // GRPCConfig contains gRPC server settings

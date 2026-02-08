@@ -56,18 +56,21 @@ export class ANSIParser {
    * Parse ANSI escape sequences and return styled segments
    */
   parse(text: string): ANSISegment[] {
+    // First, strip all non-color ANSI sequences
+    const cleanedText = this.stripNonColorSequences(text);
+    
     const segments: ANSISegment[] = [];
     let currentSegment: ANSISegment = { text: '' };
     
-    // ANSI escape sequence regex: \x1b[...m
+    // ANSI color escape sequence regex: \x1b[...m
     const ansiRegex = /\x1b\[([0-9;]+)m/g;
     let lastIndex = 0;
     let match;
     
-    while ((match = ansiRegex.exec(text)) !== null) {
+    while ((match = ansiRegex.exec(cleanedText)) !== null) {
       // Add text before the escape sequence
       if (match.index > lastIndex) {
-        currentSegment.text += text.substring(lastIndex, match.index);
+        currentSegment.text += cleanedText.substring(lastIndex, match.index);
       }
       
       // Parse the escape sequence
@@ -86,8 +89,8 @@ export class ANSIParser {
     }
     
     // Add remaining text
-    if (lastIndex < text.length) {
-      currentSegment.text += text.substring(lastIndex);
+    if (lastIndex < cleanedText.length) {
+      currentSegment.text += cleanedText.substring(lastIndex);
     }
     
     if (currentSegment.text) {
@@ -95,6 +98,67 @@ export class ANSIParser {
     }
     
     return segments;
+  }
+  
+  /**
+   * Strip non-color ANSI escape sequences
+   * Removes cursor control, mode setting, and other non-display sequences
+   */
+  private stripNonColorSequences(text: string): string {
+    let result = text;
+    
+    // Step 1: Remove CSI sequences (but keep color codes)
+    result = result.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, (match) => {
+      if (match.endsWith('m')) {
+        return match; // Keep color sequences
+      }
+      return ''; // Remove everything else
+    });
+    
+    // Step 2: Remove OSC sequences
+    result = result.replace(/\x1b\].*?(\x07|\x1b\\)/g, '');
+    
+    // Step 3: Remove other escape sequences
+    result = result.replace(/\x1b[=>]/g, '');
+    result = result.replace(/\x1b[()][AB012]/g, '');
+    
+    // Step 4: Remove zsh prompt characters (VERY aggressive)
+    // Remove any line that only contains %[m or similar
+    result = result.replace(/^%\[m.*$/gm, '');
+    
+    // Remove %[m] and variations
+    result = result.replace(/%\[m\]/g, '');
+    result = result.replace(/%\[m/g, '');  // Without closing bracket
+    result = result.replace(/%\[/g, '');
+    result = result.replace(/\]%/g, '');
+    result = result.replace(/%m/g, '');    // Just %m
+    
+    // Remove [m] patterns in all positions
+    result = result.replace(/\[m\]\[m\]/g, '');  // Double
+    result = result.replace(/\[m\]\$/g, '$ ');   // [m]$
+    result = result.replace(/\[m\$/g, '$ ');     // [m$
+    result = result.replace(/\[m\s/g, ' ');      // [m + space
+    result = result.replace(/\s\[m\]/g, ' ');    // space + [m]
+    result = result.replace(/\[m\]/g, '');       // Standalone [m]
+    result = result.replace(/\[m/g, '');         // Incomplete [m
+    
+    // Remove lines that only contain [m$ or similar
+    result = result.replace(/^\[m\$.*$/gm, '$ ');
+    
+    // Remove % prompt variables
+    result = result.replace(/%[a-zA-Z~]/g, '');
+    
+    // Step 5: Clean up arrows and special characters
+    result = result.replace(/\s*➜\s*/g, '$ ');
+    
+    // Step 6: Clean up multiple empty lines
+    result = result.replace(/\n\n+/g, '\n');
+    
+    // Step 7: Clean up line endings
+    result = result.replace(/\r\n/g, '\n');
+    result = result.replace(/\r/g, '');
+    
+    return result;
   }
   
   /**
@@ -160,10 +224,51 @@ export class ANSIParser {
   }
   
   /**
-   * Strip ANSI escape sequences from text
+   * Strip all ANSI escape sequences from text
    */
   strip(text: string): string {
-    return text.replace(/\x1b\[[0-9;]+m/g, '');
+    let result = text;
+    
+    // Remove all CSI sequences
+    result = result.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+    
+    // Remove OSC sequences
+    result = result.replace(/\x1b\].*?(\x07|\x1b\\)/g, '');
+    
+    // Remove other escape sequences
+    result = result.replace(/\x1b[=>]/g, '');
+    result = result.replace(/\x1b[()][AB012]/g, '');
+    
+    // Remove lines with only %[m
+    result = result.replace(/^%\[m.*$/gm, '');
+    
+    // Remove zsh prompt special characters (VERY aggressive)
+    result = result.replace(/%\[m\]/g, '');
+    result = result.replace(/%\[m/g, '');
+    result = result.replace(/%\[/g, '');
+    result = result.replace(/\]%/g, '');
+    result = result.replace(/%m/g, '');
+    result = result.replace(/\[m\]\[m\]/g, '');
+    result = result.replace(/\[m\]\$/g, '$ ');
+    result = result.replace(/\[m\$/g, '$ ');
+    result = result.replace(/\[m\s/g, ' ');
+    result = result.replace(/\s\[m\]/g, ' ');
+    result = result.replace(/\[m\]/g, '');
+    result = result.replace(/\[m/g, '');
+    result = result.replace(/^\[m\$.*$/gm, '$ ');
+    result = result.replace(/%[a-zA-Z~]/g, '');
+    
+    // Clean up arrows
+    result = result.replace(/\s*➜\s*/g, '$ ');
+    
+    // Clean up multiple empty lines
+    result = result.replace(/\n\n+/g, '\n');
+    
+    // Clean up line endings
+    result = result.replace(/\r\n/g, '\n');
+    result = result.replace(/\r/g, '');
+    
+    return result;
   }
 }
 

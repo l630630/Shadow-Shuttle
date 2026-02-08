@@ -1,41 +1,915 @@
-/**
- * Shadow Shuttle Mobile App
- * Main application entry point
- */
-
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
+import React, {useState, useEffect} from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useColorScheme,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
+import Icon from 'react-native-vector-icons/MaterialIcons';
 import { DeviceListScreen } from './src/screens/DeviceListScreen';
-import { QRScannerScreen } from './src/screens/QRScannerScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
+import { AIChatScreen } from './src/screens/AIChatScreen';
+import { CommandHistoryScreen } from './src/screens/CommandHistoryScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
+import { Device } from './src/types/device';
+import { getDeviceDiscoveryService } from './src/services/deviceDiscoveryService';
+import { getAPIConfig } from './src/config/api';
+import { BottomNav, TabId } from './src/components/BottomNav';
+import { DeviceCard } from './src/components/DeviceCard';
+import { Header } from './src/components/Header';
+import { StatCard } from './src/components/StatCard';
+import { AddDeviceModal } from './src/components/AddDeviceModal';
+import { useAuthStore } from './src/stores/authStore';
+import { useDeviceStore } from './src/stores/deviceStore';
+import { colors, typography, spacing, borderRadius, shadows, layout, getThemeColors } from './src/styles/theme';
 
-const Stack = createStackNavigator();
+type Screen = 'dashboard' | 'devices' | 'terminal' | 'aichat' | 'history' | 'profile' | 'aisettings';
 
 function App(): React.JSX.Element {
+  // 强制使用 Dark 模式，与 shadow-shuttle web 版保持一致
+  const isDarkMode = true; // useColorScheme() === 'dark';
+  const themeColors = getThemeColors(isDarkMode);
+  const [currentTab, setCurrentTab] = useState<TabId>('dashboard');
+  const [vpnConnected, setVpnConnected] = useState(false);
+  const [command, setCommand] = useState('');
+  const [output, setOutput] = useState('欢迎使用影梭终端\n$ ');
+  const [selectedDevice, setSelectedDevice] = useState<any>(null);
+  const [selectedDeviceForAI, setSelectedDeviceForAI] = useState<any>(null); // AI 助手专用的设备选择
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loadingDevices, setLoadingDevices] = useState(false);
+  const [homeTerminalDevice, setHomeTerminalDevice] = useState<Device | null>(null);
+  const [homeTerminalConnected, setHomeTerminalConnected] = useState(false);
+  const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+
+  // Auth state
+  const { isLoggedIn, loadAuthState, loading: authLoading } = useAuthStore();
+  const { addDevice: addDeviceToStore, loadDevices: loadDevicesFromStore, devices: storedDevices, refreshDeviceStatuses, discoverDevices, deduplicateDevices } = useDeviceStore();
+
+  // Load auth state and devices on mount
+  useEffect(() => {
+    const initApp = async () => {
+      await loadAuthState();
+      // ✨ 应用启动时加载持久化的设备数据
+      console.log('🔵 [App] Loading persisted devices from store...');
+      await loadDevicesFromStore();
+    };
+    initApp();
+  }, []);
+  
+  // ✨ 如果没有设备，自动发现设备
+  useEffect(() => {
+    const autoDiscover = async () => {
+      if (storedDevices.length === 0 && !authLoading) {
+        console.log('🔵 [App] No devices found, auto-discovering...');
+        await discoverDevices();
+      }
+    };
+    autoDiscover();
+  }, [storedDevices.length, authLoading]);
+
+  // 处理 tab 切换
+  const handleTabChange = (newTab: TabId) => {
+    // 如果从 AI 助手切换到其他 tab，清除 AI 助手的设备选择
+    if (currentTab === 'ai' && newTab !== 'ai') {
+      setSelectedDeviceForAI(null);
+    }
+    setCurrentTab(newTab);
+  };
+
+  const config = getAPIConfig();
+  const discoveryService = getDeviceDiscoveryService({
+    headscaleUrl: config.headscale.url,
+    apiKey: config.headscale.apiKey,
+  });
+
+  // ✨ 同步 deviceStore 的设备到本地 state
+  useEffect(() => {
+    console.log('🔵 [App] Syncing devices from store:', storedDevices.length);
+    setDevices(storedDevices);
+  }, [storedDevices]);
+
+  // 当 VPN 连接状态改变时，刷新设备状态
+  useEffect(() => {
+    // ConversationStore 会在第一次使用时自动初始化
+    // 不需要显式调用 initializeConversationStore()
+    
+    if (vpnConnected) {
+      // ✨ VPN 连接后，刷新设备在线状态（不是重新加载）
+      refreshDeviceStatuses();
+    }
+  }, [vpnConnected]);
+
+  const loadDevices = async () => {
+    setLoadingDevices(true);
+    try {
+      // ✨ 使用 shadowd API 发现设备
+      console.log('🔍 [App] Discovering devices via shadowd API...');
+      await discoverDevices();
+      
+      // 设备已经通过 discoverDevices 保存到 store 了
+      // storedDevices 会自动更新，然后通过 useEffect 同步到 devices
+      
+      const online = storedDevices.filter(d => d.online).length;
+      const offline = storedDevices.length - online;
+      
+      if (storedDevices.length > 0) {
+        setOutput(prev => prev + `\n✅ 已发现 ${storedDevices.length} 个设备 (${online} 在线, ${offline} 离线)\n💡 点击"设备列表"查看并连接设备\n$ `);
+      } else {
+        setOutput(prev => prev + `\n⚠️ 未发现设备\n💡 请确保 shadowd 正在运行\n$ `);
+      }
+    } catch (error) {
+      console.error('Failed to load devices:', error);
+      Alert.alert(
+        '加载失败',
+        '无法加载设备列表，请检查网络连接',
+        [{ text: '确定' }]
+      );
+      setDevices([]);
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
+  const backgroundStyle = {
+    backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5',
+    flex: 1,
+  };
+
+  // Show loading screen while checking auth state
+  if (authLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+            加载中...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isLoggedIn) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <LoginScreen />
+      </SafeAreaView>
+    );
+  }
+
+  const toggleVPN = () => {
+    const newState = !vpnConnected;
+    setVpnConnected(newState);
+    
+    if (!newState) {
+      // VPN 断开时，断开首页终端连接
+      setHomeTerminalDevice(null);
+      setHomeTerminalConnected(false);
+      setOutput('欢迎使用影梭终端\n$ ');
+    }
+    
+    setOutput(prev => prev + `\nVPN ${newState ? '已连接' : '已断开'}\n$ `);
+  };
+
+  const executeCommand = async () => {
+    if (!command.trim()) return;
+    
+    if (!homeTerminalConnected || !homeTerminalDevice) {
+      setOutput(prev => prev + command + '\n⚠️ 请先连接到设备\n💡 点击"设备列表"→选择设备→使用SSH终端\n$ ');
+      setCommand('');
+      return;
+    }
+
+    // 显示命令
+    setOutput(prev => prev + command + '\n');
+    
+    try {
+      // TODO: 实际发送命令到 SSH 服务
+      // const result = await sshService.executeCommand(homeTerminalDevice, command);
+      // setOutput(prev => prev + result + '\n$ ');
+      
+      // 临时模拟响应
+      setOutput(prev => prev + `正在 ${homeTerminalDevice.name} 上执行命令...\n$ `);
+    } catch (error) {
+      setOutput(prev => prev + `错误: ${error}\n$ `);
+    }
+    
+    setCommand('');
+  };
+
+  // Calculate device counts
+  const onlineCount = devices.filter(d => d.online).length;
+  const offlineCount = devices.length - onlineCount;
+
+  // 处理设备点击（从设备列表）
+  const handleDevicePress = (device: Device) => {
+    if (!device.online) {
+      Alert.alert(
+        '设备离线',
+        `${device.name} 当前离线，无法连接`,
+        [{ text: '确定' }]
+      );
+      return;
+    }
+
+    // 设置选中的设备，保持在 dashboard，但会触发终端显示
+    setSelectedDevice(device);
+  };
+
+  // 切换首页终端连接的设备
+  const switchHomeTerminalDevice = (device: Device) => {
+    if (!device.online) {
+      Alert.alert(
+        '设备离线',
+        `${device.name} 当前离线，无法连接`,
+        [{ text: '确定' }]
+      );
+      return;
+    }
+    
+    setHomeTerminalDevice(device);
+    setHomeTerminalConnected(true);
+    setOutput(prev => prev + `\n已切换到 ${device.name} (${device.meshIP})\n$ `);
+  };
+
+  // 格式化最后在线时间
+  const formatLastSeen = (date: Date): string => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (minutes < 1) return '刚刚';
+    if (minutes < 60) return `${minutes} 分钟前`;
+    if (hours < 24) return `${hours} 小时前`;
+    return `${days} 天前`;
+  };
+
+  // 获取设备图标
+  const getDeviceIcon = (device: Device): string => {
+    if (device.hostname.includes('mac') || device.hostname.includes('Mac')) {
+      return '💻';
+    }
+    if (device.hostname.includes('win') || device.hostname.includes('Win')) {
+      return '🖥️';
+    }
+    if (device.hostname.includes('linux') || device.hostname.includes('ubuntu')) {
+      return '🐧';
+    }
+    return '💻';
+  };
+
+  // 简单的导航对象
+  const navigation = {
+    navigate: (screen: string, params?: any) => {
+      if (screen === 'Terminal') {
+        setSelectedDevice(params?.device);
+        handleTabChange('dashboard'); // 暂时保持在 dashboard，后续可以添加专门的终端 tab
+      } else if (screen === 'QRScanner') {
+        // 打开 QR 扫描模态框
+        setShowAddDeviceModal(false);
+        // TODO: 实现 QR 扫描页面
+        Alert.alert('扫码功能', '扫码功能开发中...\n请使用手动输入方式添加设备');
+      } else if (screen === 'AIChat') {
+        // AI 对话需要设备参数
+        if (params?.device) {
+          setSelectedDeviceForAI(params.device);
+          handleTabChange('ai');
+        } else {
+          Alert.alert(
+            '错误',
+            '请先选择一个设备',
+            [{ text: '确定' }]
+          );
+        }
+      } else if (screen === 'History') {
+        handleTabChange('history');
+      }
+    },
+    goBack: () => {
+      handleTabChange('dashboard');
+    },
+  };
+
+  // 处理手动添加设备
+  const handleManualAddDevice = async (ip: string, port: string, username: string, password: string) => {
+    try {
+      // 创建新设备对象
+      const newDevice: Device = {
+        id: `device-${Date.now()}`,
+        name: `${username}@${ip}`,
+        hostname: ip,
+        meshIP: ip,
+        sshPort: parseInt(port),
+        online: false, // 初始状态为离线，需要测试连接
+        lastSeen: new Date(),
+        publicKey: '', // 手动添加的设备暂时没有公钥
+      };
+
+      // 添加到 store
+      await addDeviceToStore(newDevice);
+
+      // 添加到本地列表
+      setDevices(prev => [...prev, newDevice]);
+
+      Alert.alert(
+        '添加成功',
+        `设备 ${newDevice.name} 已添加\n正在测试连接...`,
+        [{ text: '确定' }]
+      );
+
+      // TODO: 测试 SSH 连接
+      // 这里可以调用 sshService 测试连接
+    } catch (error) {
+      throw new Error('添加设备失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  // 处理扫码添加设备
+  const handleScanQR = () => {
+    navigation.navigate('QRScanner');
+  };
+
+  // 如果在设备列表页面（通过 dashboard 显示）
+  if (currentTab === 'dashboard' && devices.length > 0 && !selectedDevice) {
+    // 显示完整设备列表
+    // 暂时保持在 dashboard，后续可以添加专门的设备列表视图
+  }
+
+  // 如果在终端页面
+  if (selectedDevice && currentTab === 'dashboard') {
+    // 这里可以显示终端，但暂时保持原有逻辑
+  }
+
+  // 如果选中了设备且在 dashboard，显示终端页面（全屏，无底部导航）
+  if (selectedDevice && currentTab === 'dashboard') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <TerminalScreen
+          route={{ params: { device: selectedDevice } }}
+          navigation={{
+            ...navigation,
+            goBack: () => {
+              setSelectedDevice(null);
+            },
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // 如果在 AI 对话界面
+  if (currentTab === 'ai') {
+    // 如果没有选择设备，自动选择第一个在线设备
+    if (!selectedDeviceForAI && devices.length > 0) {
+      const firstOnlineDevice = devices.find(d => d.online);
+      if (firstOnlineDevice) {
+        // 使用 setTimeout 避免在渲染期间更新状态
+        setTimeout(() => setSelectedDeviceForAI(firstOnlineDevice), 0);
+      }
+    }
+    
+    // 如果还是没有设备，显示设备列表供选择
+    if (!selectedDeviceForAI) {
+      return (
+        <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+          <StatusBar
+            barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+            backgroundColor={themeColors.background}
+          />
+          
+          {/* Header */}
+          <View style={[styles.aiDeviceSelectHeader, { backgroundColor: themeColors.surface, borderBottomColor: themeColors.border }]}>
+            <Text style={[styles.aiDeviceSelectTitle, { color: themeColors.textPrimary }]}>
+              选择设备
+            </Text>
+            <Text style={[styles.aiDeviceSelectSubtitle, { color: themeColors.textSecondary }]}>
+              选择一个设备开始 AI 对话
+            </Text>
+          </View>
+
+          {/* Device List */}
+          <ScrollView style={styles.aiDeviceSelectList} contentContainerStyle={styles.aiDeviceSelectContent}>
+            {!vpnConnected ? (
+              <View style={styles.emptyDevicesCard}>
+                <Icon name="wifi-off" size={48} color={themeColors.textMuted} />
+                <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
+                  请先连接 VPN 以查看设备
+                </Text>
+                <TouchableOpacity
+                  style={[styles.primaryButton, { backgroundColor: colors.primary }]}
+                  onPress={() => handleTabChange('dashboard')}
+                >
+                  <Text style={styles.primaryButtonText}>返回首页连接</Text>
+                </TouchableOpacity>
+              </View>
+            ) : loadingDevices ? (
+              <View style={styles.loadingCard}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+                  正在加载设备...
+                </Text>
+              </View>
+            ) : devices.length === 0 ? (
+              <View style={styles.emptyDevicesCard}>
+                <Icon name="devices" size={48} color={themeColors.textMuted} />
+                <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
+                  还没有配对的设备
+                </Text>
+                <TouchableOpacity
+                  style={[styles.scanButton, { backgroundColor: colors.primary }]}
+                  onPress={() => navigation.navigate('QRScanner')}
+                >
+                  <Icon name="qr-code-scanner" size={20} color="#FFFFFF" />
+                  <Text style={styles.scanButtonText}>扫码配对</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <>
+                {devices.map((device) => (
+                  <DeviceCard
+                    key={device.id}
+                    device={device}
+                    onPress={(dev) => {
+                      if (dev.online) {
+                        setSelectedDeviceForAI(dev);
+                      } else {
+                        Alert.alert(
+                          '设备离线',
+                          `${dev.name} 当前离线，无法使用 AI 助手`,
+                          [{ text: '确定' }]
+                        );
+                      }
+                    }}
+                  />
+                ))}
+              </>
+            )}
+          </ScrollView>
+
+          <BottomNav currentTab={currentTab} onTabChange={handleTabChange} />
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <AIChatScreen
+          route={{ params: { device: selectedDeviceForAI } }}
+          navigation={navigation}
+        />
+        <BottomNav currentTab={currentTab} onTabChange={handleTabChange} />
+      </SafeAreaView>
+    );
+  }
+
+  // 如果在命令历史界面
+  if (currentTab === 'history') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <CommandHistoryScreen navigation={navigation} />
+        <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+      </SafeAreaView>
+    );
+  }
+
+  // 如果在个人中心界面
+  if (currentTab === 'profile') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <ProfileScreen navigation={navigation} />
+        <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+      </SafeAreaView>
+    );
+  }
+
+  // Dashboard (首页)
   return (
-    <NavigationContainer>
-      <Stack.Navigator
-        initialRouteName="DeviceList"
-        screenOptions={{
-          headerShown: false,
-        }}
+    <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={themeColors.background}
+      />
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
-        <Stack.Screen
-          name="DeviceList"
-          component={DeviceListScreen}
+        {/* Header */}
+        <Header
+          showLogo
         />
-        <Stack.Screen
-          name="QRScanner"
-          component={QRScannerScreen}
-        />
-        <Stack.Screen
-          name="Terminal"
-          component={TerminalScreen}
-        />
-      </Stack.Navigator>
-    </NavigationContainer>
+
+        {/* Stats Cards */}
+        <View style={styles.statsContainer}>
+          <StatCard
+            title="在线节点"
+            value={onlineCount}
+            icon="wifi"
+            iconColor={colors.online}
+          />
+          <StatCard
+            title="离线节点"
+            value={offlineCount}
+            icon="wifi-off"
+            iconColor={colors.offline}
+          />
+        </View>
+
+        {/* VPN Status Card */}
+        <View style={styles.section}>
+          <View style={[
+            styles.vpnCard,
+            { 
+              backgroundColor: themeColors.surface,
+              borderColor: themeColors.border,
+            },
+            shadows.md,
+          ]}>
+            <View style={styles.vpnHeader}>
+              <Text style={[styles.vpnTitle, { color: themeColors.textPrimary }]}>
+                VPN 状态
+              </Text>
+              <View style={styles.vpnStatusRow}>
+                <View style={[
+                  styles.vpnStatusDot,
+                  { backgroundColor: vpnConnected ? colors.online : colors.offline }
+                ]} />
+                <Text style={[styles.vpnStatusText, { color: themeColors.textPrimary }]}>
+                  {vpnConnected ? '已连接' : '未连接'}
+                </Text>
+              </View>
+            </View>
+
+            {vpnConnected && (
+              <Text style={[styles.vpnIp, { color: themeColors.textSecondary }]}>
+                Mesh IP: 100.64.0.1
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.vpnButton,
+                { backgroundColor: vpnConnected ? colors.status.error : colors.primary },
+                shadows.md,
+              ]}
+              onPress={toggleVPN}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.vpnButtonText}>
+                {vpnConnected ? '断开连接' : '连接 VPN'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Device List */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>
+              Mesh 设备
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              {devices.length > 1 && (
+                <TouchableOpacity onPress={async () => {
+                  const count = await deduplicateDevices();
+                  Alert.alert('清理完成', `当前共有 ${count} 个设备`);
+                }}>
+                  <Text style={[styles.sectionLink, { color: colors.warning }]}>
+                    清理重复
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => {
+                // TODO: 显示完整设备列表模态框或导航到设备列表页面
+                Alert.alert('设备列表', '完整设备列表功能开发中...');
+              }}>
+                <Text style={[styles.sectionLink, { color: colors.primary }]}>
+                  查看全部
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {!vpnConnected ? (
+            <View style={styles.emptyDevicesCard}>
+              <Icon name="wifi-off" size={48} color={themeColors.textMuted} />
+              <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
+                请先连接 VPN 以查看设备
+              </Text>
+            </View>
+          ) : loadingDevices ? (
+            <View style={styles.loadingCard}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+                正在加载设备...
+              </Text>
+            </View>
+          ) : devices.length === 0 ? (
+            <View style={styles.emptyDevicesCard}>
+              <Icon name="devices" size={48} color={themeColors.textMuted} />
+              <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
+                还没有配对的设备
+              </Text>
+              <TouchableOpacity
+                style={[styles.scanButton, { backgroundColor: colors.primary }]}
+                onPress={() => navigation.navigate('QRScanner')}
+              >
+                <Icon name="qr-code-scanner" size={20} color="#FFFFFF" />
+                <Text style={styles.scanButtonText}>扫码配对</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              {devices.slice(0, 3).map((device) => (
+                <DeviceCard
+                  key={device.id}
+                  device={device}
+                  onPress={handleDevicePress}
+                />
+              ))}
+              {devices.length > 3 && (
+                <TouchableOpacity
+                  style={styles.viewAllButton}
+                  onPress={() => {
+                    // TODO: 显示完整设备列表
+                    Alert.alert('设备列表', '完整设备列表功能开发中...');
+                  }}
+                >
+                  <Text style={[styles.viewAllText, { color: colors.primary }]}>
+                    查看全部 {devices.length} 个设备 →
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
+          )}
+        </View>
+
+
+      </ScrollView>
+
+      {/* FAB - Add Device */}
+      <TouchableOpacity
+        style={[styles.fab, shadows.primary]}
+        onPress={() => setShowAddDeviceModal(true)}
+        activeOpacity={0.8}
+      >
+        <Icon name="add" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+
+      {/* Add Device Modal */}
+      <AddDeviceModal
+        visible={showAddDeviceModal}
+        onClose={() => setShowAddDeviceModal(false)}
+        onManualAdd={handleManualAddDevice}
+        onScanQR={handleScanQR}
+      />
+
+      {/* Bottom Navigation */}
+      <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  // Container
+  container: {
+    flex: 1,
+  },
+
+  // Scroll View
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: layout.bottomNavHeight + spacing.xl,
+  },
+
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+
+  // Section
+  section: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.bold,
+  },
+  sectionLink: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+  sectionHint: {
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+  },
+
+  // VPN Card
+  vpnCard: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.xl,
+    borderWidth: 1,
+  },
+  vpnHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  vpnTitle: {
+    fontSize: typography.fontSize.lg,
+    fontWeight: typography.fontWeight.semibold,
+  },
+  vpnStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  vpnStatusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  vpnStatusText: {
+    fontSize: typography.fontSize.base,
+  },
+  vpnIp: {
+    fontSize: typography.fontSize.sm,
+    marginBottom: spacing.md,
+  },
+  vpnButton: {
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  vpnButtonText: {
+    color: '#FFFFFF',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Empty States
+  emptyDevicesCard: {
+    alignItems: 'center',
+    paddingVertical: spacing['3xl'],
+  },
+  emptyDevicesText: {
+    fontSize: typography.fontSize.base,
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  scanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  scanButtonText: {
+    color: '#FFFFFF',
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // Loading
+  loadingCard: {
+    alignItems: 'center',
+    paddingVertical: spacing['3xl'],
+  },
+  loadingText: {
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.md,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  // View All Button
+  viewAllButton: {
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  viewAllText: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+  },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: layout.fabBottom,
+    right: layout.fabRight,
+    width: layout.fabSize,
+    height: layout.fabSize,
+    borderRadius: borderRadius.lg,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Empty State (for AI/Profile tabs)
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing['3xl'],
+  },
+  emptyStateText: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: typography.fontWeight.bold,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  emptyStateHint: {
+    fontSize: typography.fontSize.base,
+    textAlign: 'center',
+  },
+
+  // Primary Button
+  primaryButton: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    marginTop: spacing.xl,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: typography.fontSize.base,
+    fontWeight: typography.fontWeight.semibold,
+  },
+
+  // AI Device Select
+  aiDeviceSelectHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xl,
+    borderBottomWidth: 1,
+  },
+  aiDeviceSelectTitle: {
+    fontSize: typography.fontSize['2xl'],
+    fontWeight: typography.fontWeight.bold,
+    marginBottom: spacing.xs,
+  },
+  aiDeviceSelectSubtitle: {
+    fontSize: typography.fontSize.base,
+  },
+  aiDeviceSelectList: {
+    flex: 1,
+  },
+  aiDeviceSelectContent: {
+    padding: spacing.lg,
+    paddingBottom: layout.bottomNavHeight + spacing.xl,
+  },
+});
 
 export default App;
