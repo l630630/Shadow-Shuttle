@@ -1,5 +1,6 @@
 # Binaries
 shadowd/shadowd
+shadowd/shadowd-generate-qr
 shadowd/*.log
 shadowd/*.pid
 
@@ -30,6 +31,10 @@ yarn-error.log*
 # React Native
 .expo/
 .expo-shared/
+mobile-app/ios/Pods/
+mobile-app/ios/build/
+mobile-app/ios/.xcode.env.local
+**/xcuserdata/
 *.jks
 *.p8
 *.p12

@@ -1,12 +1,15 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	qrterminal "github.com/mdp/qrterminal/v3"
 	"github.com/shadow-shuttle/shadowd/config"
 	"github.com/shadow-shuttle/shadowd/grpc"
 	"github.com/shadow-shuttle/shadowd/http"
@@ -22,6 +25,16 @@ var (
 )
 
 func main() {
+	// Special CLI subcommand: generate-qr
+	// Usage: shadowd generate-qr
+	if len(os.Args) > 1 && os.Args[1] == "generate-qr" {
+		if err := runGenerateQR(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating QR code: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	flag.Parse()
 
 	// Initialize logger
@@ -102,6 +115,72 @@ func main() {
 
 	log.Info("Shutting down Shadowd")
 	// Cleanup is handled by defer statements
+}
+
+// PairingCode is the JSON structure encoded into the QR code.
+// It matches the mobile app's PairingCode interface.
+type PairingCode struct {
+	DeviceID  string `json:"deviceId"`
+	MeshIP    string `json:"meshIP"`
+	SSHPort   int    `json:"sshPort"`
+	GRPCPort  int    `json:"grpcPort"`
+	PublicKey string `json:"publicKey"`
+	Timestamp int64  `json:"timestamp"`
+	Signature string `json:"signature"`
+}
+
+// runGenerateQR prints a pairing QR code in the terminal for the mobile app to scan.
+// It is designed for local/LAN usage on macOS (but works on other platforms as well).
+func runGenerateQR() error {
+	// Detect preferred local IP (LAN IP if possible, otherwise fallback)
+	ip, err := network.GetPreferredLocalIP()
+	if err != nil || ip == "" {
+		ip = "127.0.0.1"
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil || hostname == "" {
+		hostname = "shadowd"
+	}
+
+	now := time.Now().UnixMilli()
+
+	code := PairingCode{
+		DeviceID:  fmt.Sprintf("%s-%d", hostname, now),
+		MeshIP:    ip,
+		SSHPort:   2222,  // default SSH port exposed by shadowd
+		GRPCPort:  50051, // default gRPC port
+		PublicKey: "",
+		Timestamp: now,
+		Signature: "",
+	}
+
+	data, err := json.Marshal(code)
+	if err != nil {
+		return fmt.Errorf("failed to marshal pairing code: %w", err)
+	}
+
+	fmt.Println()
+	fmt.Println("Shadow Shuttle - 设备配对二维码")
+	fmt.Println()
+
+	cfg := qrterminal.Config{
+		Level:     qrterminal.M,
+		Writer:    os.Stdout,
+		BlackChar: qrterminal.BLACK,
+		WhiteChar: qrterminal.WHITE,
+		QuietZone: 1,
+	}
+	qrterminal.GenerateWithConfig(string(data), cfg)
+
+	fmt.Println()
+	fmt.Printf("设备名称: %s\n", hostname)
+	fmt.Printf("局域网 IP: %s\n", ip)
+	fmt.Println()
+	fmt.Println("请在手机 App 中打开「扫描二维码」，对准此终端中的二维码完成配对。")
+	fmt.Println()
+
+	return nil
 }
 
 // initializeWireGuard initializes and starts the WireGuard manager

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>ShadowShuttleTemp</string>
 	<key>CFBundleExecutable</key>
@@ -26,14 +26,26 @@
 	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-	  <!-- Do not change NSAllowsArbitraryLoads to true, or you will risk app rejection! -->
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_shadowd._tcp</string>
+		<string>_ssh._tcp</string>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>用于扫描电脑上的配对二维码以添加设备。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Shadow Shuttle needs access to your local network to discover and connect to your devices via mDNS/Bonjour.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>用于发现附近的设备和优化本地网络连接。</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>MaterialIcons.ttf</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIRequiredDeviceCapabilities</key>
@@ -48,9 +60,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>MaterialIcons.ttf</string>
-	</array>
 </dict>
 </plist>

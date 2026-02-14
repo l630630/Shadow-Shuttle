@@ -15,6 +15,8 @@ import {
   SafeAreaView,
   useColorScheme,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Device } from '../types/device';
@@ -244,80 +246,85 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
       {needsPassword ? (
-        // Password input screen
-        <View style={styles.passwordContainer}>
-          <View style={[styles.passwordCard, { backgroundColor: themeColors.surface }, shadows.lg]}>
-            <Icon name="lock-outline" size={48} color={colors.primary} style={styles.lockIcon} />
-            
-            <Text style={[styles.passwordTitle, { color: themeColors.textPrimary }]}>
-              SSH 连接
-            </Text>
-            <Text style={[styles.passwordSubtitle, { color: themeColors.textSecondary }]}>
-              连接到 {device.name}
-            </Text>
-            
-            <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-              <Icon name="person-outline" size={20} color={themeColors.textSecondary} />
-              <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                用户名: a0000
+        // Password input screen with keyboard avoidance
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.passwordContainer}>
+            <View style={[styles.passwordCard, { backgroundColor: themeColors.surface }, shadows.lg]}>
+              <Icon name="lock-outline" size={48} color={colors.primary} style={styles.lockIcon} />
+              
+              <Text style={[styles.passwordTitle, { color: themeColors.textPrimary }]}>
+                SSH 连接
               </Text>
-            </View>
-            
-            <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-              <Icon name="computer" size={20} color={themeColors.textSecondary} />
-              <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                主机: {device.meshIP}
+              <Text style={[styles.passwordSubtitle, { color: themeColors.textSecondary }]}>
+                连接到 {device.name}
               </Text>
-            </View>
-            
-            <View style={styles.inputGroup}>
-              <Icon name="vpn-key" size={20} color={themeColors.textMuted} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.passwordInput, { 
-                  backgroundColor: themeColors.background,
-                  color: themeColors.textPrimary,
-                  borderColor: themeColors.border,
-                }]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="请输入密码"
-                placeholderTextColor={themeColors.textMuted}
-                secureTextEntry
-                autoFocus
-                onSubmitEditing={handleConnect}
-                editable={!connecting}
-              />
-            </View>
-            
-            {connecting && (
-              <View style={styles.connectingContainer}>
-                <ActivityIndicator size="small" color={colors.primary} />
-                <Text style={[styles.connectingText, { color: themeColors.textSecondary }]}>
-                  正在连接...
+              
+              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
+                <Icon name="person-outline" size={20} color={themeColors.textSecondary} />
+                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
+                  用户名: a0000
                 </Text>
               </View>
-            )}
-            
-            <View style={styles.passwordButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton, { backgroundColor: themeColors.surfaceDarker }]}
-                onPress={() => navigation.goBack()}
-                disabled={connecting}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>
-                  取消
-                </Text>
-              </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.connectButton,
-                  { backgroundColor: (!password.trim() || connecting) ? themeColors.textMuted : colors.primary },
-                  shadows.sm,
-                ]}
-                onPress={handleConnect}
+              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
+                <Icon name="computer" size={20} color={themeColors.textSecondary} />
+                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
+                  主机: {device.meshIP}
+                </Text>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Icon name="vpn-key" size={20} color={themeColors.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  style={[styles.passwordInput, { 
+                    backgroundColor: themeColors.background,
+                    color: themeColors.textPrimary,
+                    borderColor: themeColors.border,
+                  }]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="请输入密码"
+                  placeholderTextColor={themeColors.textMuted}
+                  secureTextEntry
+                  autoFocus
+                  onSubmitEditing={handleConnect}
+                  editable={!connecting}
+                />
+              </View>
+              
+              {connecting && (
+                <View style={styles.connectingContainer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.connectingText, { color: themeColors.textSecondary }]}>
+                    正在连接...
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.passwordButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton, { backgroundColor: themeColors.surfaceDarker }]}
+                  onPress={() => navigation.goBack()}
+                  disabled={connecting}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>
+                    取消
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.connectButton,
+                    { backgroundColor: (!password.trim() || connecting) ? themeColors.textMuted : colors.primary },
+                    shadows.sm,
+                  ]}
+                  onPress={handleConnect}
                 disabled={!password.trim() || connecting}
                 activeOpacity={0.8}
               >
@@ -327,6 +334,7 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
             </View>
           </View>
         </View>
+        </KeyboardAvoidingView>
       ) : (
         // Terminal screen
         <>
@@ -389,6 +397,10 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  // Keyboard avoiding view
+  keyboardAvoidingView: {
     flex: 1,
   },
   // Password screen styles

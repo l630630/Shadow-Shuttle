@@ -16,6 +16,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
@@ -35,7 +36,8 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   onManualAdd,
   onScanQR,
 }) => {
-  const [mode, setMode] = useState<AddMode>('select');
+  // 默认直接进入「手动输入」模式，避免用户额外多点一步
+  const [mode, setMode] = useState<AddMode>('manual');
   const [loading, setLoading] = useState(false);
   
   // Manual input fields
@@ -49,7 +51,8 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const themeColors = getThemeColors(isDarkMode);
 
   const handleClose = () => {
-    setMode('select');
+    // 关闭时重置为手动模式（下次打开仍然直接显示表单）
+    setMode('manual');
     setIp('');
     setPort('22');
     setUsername('');
@@ -59,7 +62,6 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   };
 
   const handleManualSubmit = async () => {
-    // Validation
     if (!ip.trim()) {
       Alert.alert('错误', '请输入 IP 地址');
       return;
@@ -161,7 +163,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
       <View style={[styles.infoBox, { backgroundColor: `${colors.primary}10` }]}>
         <Icon name="info-outline" size={20} color={colors.primary} />
         <Text style={[styles.infoText, { color: colors.primary }]}>
-          扫码方式需要在目标设备上运行 shadowd generate-qr 命令
+          扫码方式需要在目标设备上运行 shadowd-generate-qr 命令
         </Text>
       </View>
     </View>
@@ -173,7 +175,10 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.manualInput}
     >
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {/* Header */}
         <View style={styles.manualHeader}>
           <TouchableOpacity
@@ -349,6 +354,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: borderRadius['2xl'],
     borderTopRightRadius: borderRadius['2xl'],
     maxHeight: '90%',
+    minHeight: Math.min(Dimensions.get('window').height * 0.6, 500),
     paddingBottom: spacing.xl,
   },
   closeButton: {
@@ -419,9 +425,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Manual Input
+  // Manual Input（不用 flex:1，避免在无高度父容器里被算成 0）
   manualInput: {
-    flex: 1,
+    minHeight: 400,
   },
   manualHeader: {
     flexDirection: 'row',

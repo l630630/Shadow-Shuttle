@@ -39,6 +39,12 @@ target 'ShadowShuttleTemp' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
+  # Camera for react-native-qrcode-scanner
+  pod 'react-native-camera', :path => '../node_modules/react-native-camera', :subspecs => [
+    'RCT',
+    'BarcodeDetectorMLKit',
+  ]
+
   target 'ShadowShuttleTempTests' do
     inherit! :complete
     # Pods for testing
@@ -51,5 +57,12 @@ target 'ShadowShuttleTemp' do
       config[:reactNativePath],
       :mac_catalyst_enabled => false
     )
+    
+    # Fix boost checksum issue
+    installer.pods_project.targets.each do |target|
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+    end
   end
 end

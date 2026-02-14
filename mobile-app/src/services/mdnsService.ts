@@ -92,6 +92,19 @@ export class MDNSService {
       // Listen for errors
       this.zeroconf.on('error', (error: any) => {
         console.error('[MDNSService] Error:', error);
+        
+        // Handle specific error codes
+        if (error.code === '-72008' || error.NSNetServicesErrorCode === '-72008') {
+          console.error('[MDNSService] Network service discovery failed. This may be due to:');
+          console.error('  1. Local network access denied (iOS Settings > Privacy > Local Network)');
+          console.error('  2. Network unavailable');
+          console.error('  3. mDNS/Bonjour service not available');
+        }
+        
+        // Stop scanning and resolve with empty array on error
+        this.isScanning = false;
+        this.zeroconf.stop();
+        resolve([]);
       });
 
       // Listen for scan stop

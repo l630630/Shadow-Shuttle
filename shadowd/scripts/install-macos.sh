@@ -59,7 +59,7 @@ device:
   name: "$(hostname -s)"
 
 ssh:
-  port: 22
+  port: 2222
   host_key_path: "$CONFIG_DIR/ssh_host_key"
   authorized_keys_path: "$CONFIG_DIR/authorized_keys"
   allowed_networks:

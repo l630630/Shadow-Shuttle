@@ -54,7 +54,9 @@ Shadow Shuttle 是一个基于私有 Mesh 网络的安全 SSH 访问系统，让
 
 ## 🚀 快速开始
 
-### 1. 启动 Shadowd 守护进程
+### 本地测试（同一网络）
+
+#### 1. 启动 Shadowd 守护进程
 
 ```bash
 cd shadowd
@@ -66,7 +68,7 @@ Shadowd 将启动以下服务：
 - WebSocket SSH 代理 (端口 8022)
 - gRPC Server (端口 50052)
 
-### 2. 运行移动应用
+#### 2. 运行移动应用
 
 ```bash
 cd mobile-app
@@ -80,6 +82,37 @@ npm run ios
 ```
 
 详细步骤请参考 [DEPLOYMENT.md](DEPLOYMENT.md)
+
+### 跨网访问（互联网远程控制）
+
+要实现从任何地方通过手机控制电脑，需要部署 Headscale 协调服务器：
+
+#### 1. 部署 Headscale 服务器
+
+在云服务器（VPS）上：
+
+```bash
+cd headscale
+./scripts/deploy.sh
+./scripts/manage.sh namespace create default
+./scripts/manage.sh preauth create default
+```
+
+#### 2. 配置电脑端
+
+编辑 `shadowd/shadowd.yaml`：
+
+```yaml
+headscale:
+  url: https://your-headscale-server.com
+  preauth_key: your-preauth-key
+```
+
+#### 3. 配置手机 App
+
+在 App 中连接 VPN，使用 Headscale 服务器地址和预授权密钥。
+
+**完整指南**：[跨网访问部署指南](docs/CROSS_NETWORK_SETUP.md)
 
 ## 📱 移动端使用
 
@@ -102,11 +135,14 @@ npm run ios
 
 ## 📚 文档
 
-- [部署指南](DEPLOYMENT.md) - 快速部署和配置
+- [快速开始](QUICK_START.md) - 5 分钟快速上手
+- [部署指南](DEPLOYMENT.md) - 本地部署和配置
+- [跨网访问部署](docs/CROSS_NETWORK_SETUP.md) - 互联网远程控制配置 ⭐
 - [贡献指南](CONTRIBUTING.md) - 如何参与项目开发
 - [Headscale 文档](headscale/README.md) - Headscale 服务器配置
 - [Shadowd 文档](shadowd/README.md) - Shadowd 守护进程说明
 - [移动端文档](mobile-app/README.md) - 移动应用开发指南
+- [SSH 代理迁移指南](docs/SSH_PROXY_MIGRATION.md) - 从旧架构迁移
 
 ## 🔒 安全特性
 

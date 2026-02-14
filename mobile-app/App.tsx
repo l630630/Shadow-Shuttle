@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react';
+import React, {useState, useEffect, useCallback, useMemo} from 'react';
 import {
   SafeAreaView,
   ScrollView,
@@ -20,6 +20,7 @@ import { AIChatScreen } from './src/screens/AIChatScreen';
 import { CommandHistoryScreen } from './src/screens/CommandHistoryScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { QRScannerScreen } from './src/screens/QRScannerScreen';
 import { Device } from './src/types/device';
 import { getDeviceDiscoveryService } from './src/services/deviceDiscoveryService';
 import { getAPIConfig } from './src/config/api';
@@ -44,11 +45,12 @@ function App(): React.JSX.Element {
   const [output, setOutput] = useState('欢迎使用影梭终端\n$ ');
   const [selectedDevice, setSelectedDevice] = useState<any>(null);
   const [selectedDeviceForAI, setSelectedDeviceForAI] = useState<any>(null); // AI 助手专用的设备选择
-  const [devices, setDevices] = useState<Device[]>([]);
+  // 设备列表统一由全局 store 管理，这里不再维护本地副本
   const [loadingDevices, setLoadingDevices] = useState(false);
   const [homeTerminalDevice, setHomeTerminalDevice] = useState<Device | null>(null);
   const [homeTerminalConnected, setHomeTerminalConnected] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
 
   // Auth state
   const { isLoggedIn, loadAuthState, loading: authLoading } = useAuthStore();
@@ -56,34 +58,51 @@ function App(): React.JSX.Element {
 
   // Load auth state and devices on mount
   useEffect(() => {
-    const initApp = async () => {
-      await loadAuthState();
-      // ✨ 应用启动时加载持久化的设备数据
+    // 立即加载认证状态（不阻塞）
+    loadAuthState();
+    
+    // 延迟加载设备数据，给 UI 时间渲染
+    const timer = setTimeout(() => {
       console.log('🔵 [App] Loading persisted devices from store...');
-      await loadDevicesFromStore();
-    };
-    initApp();
+      loadDevicesFromStore();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
   
-  // ✨ 如果没有设备，自动发现设备
+  // ✨ 如果没有设备，延迟自动发现设备
   useEffect(() => {
-    const autoDiscover = async () => {
-      if (storedDevices.length === 0 && !authLoading) {
+    if (storedDevices.length === 0 && !authLoading) {
+      // 延迟发现，避免阻塞 UI
+      const timer = setTimeout(() => {
         console.log('🔵 [App] No devices found, auto-discovering...');
-        await discoverDevices();
-      }
-    };
-    autoDiscover();
+        discoverDevices();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
   }, [storedDevices.length, authLoading]);
 
-  // 处理 tab 切换
-  const handleTabChange = (newTab: TabId) => {
+  // 当 VPN 连接状态改变时，刷新设备状态
+  useEffect(() => {
+    if (vpnConnected) {
+      // ✨ VPN 连接后，延迟刷新设备在线状态
+      const timer = setTimeout(() => {
+        refreshDeviceStatuses();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [vpnConnected]);
+
+  // ✨ 使用 useCallback 缓存函数，避免子组件重渲染
+  const handleTabChange = useCallback((newTab: TabId) => {
     // 如果从 AI 助手切换到其他 tab，清除 AI 助手的设备选择
     if (currentTab === 'ai' && newTab !== 'ai') {
       setSelectedDeviceForAI(null);
     }
     setCurrentTab(newTab);
-  };
+  }, [currentTab]);
 
   const config = getAPIConfig();
   const discoveryService = getDeviceDiscoveryService({
@@ -91,91 +110,21 @@ function App(): React.JSX.Element {
     apiKey: config.headscale.apiKey,
   });
 
-  // ✨ 同步 deviceStore 的设备到本地 state
-  useEffect(() => {
-    console.log('🔵 [App] Syncing devices from store:', storedDevices.length);
-    setDevices(storedDevices);
-  }, [storedDevices]);
+  // ✨ 直接使用 storedDevices，避免不必要的状态同步
+  const devices = storedDevices;
 
-  // 当 VPN 连接状态改变时，刷新设备状态
-  useEffect(() => {
-    // ConversationStore 会在第一次使用时自动初始化
-    // 不需要显式调用 initializeConversationStore()
-    
-    if (vpnConnected) {
-      // ✨ VPN 连接后，刷新设备在线状态（不是重新加载）
-      refreshDeviceStatuses();
-    }
-  }, [vpnConnected]);
-
-  const loadDevices = async () => {
-    setLoadingDevices(true);
-    try {
-      // ✨ 使用 shadowd API 发现设备
-      console.log('🔍 [App] Discovering devices via shadowd API...');
-      await discoverDevices();
-      
-      // 设备已经通过 discoverDevices 保存到 store 了
-      // storedDevices 会自动更新，然后通过 useEffect 同步到 devices
-      
-      const online = storedDevices.filter(d => d.online).length;
-      const offline = storedDevices.length - online;
-      
-      if (storedDevices.length > 0) {
-        setOutput(prev => prev + `\n✅ 已发现 ${storedDevices.length} 个设备 (${online} 在线, ${offline} 离线)\n💡 点击"设备列表"查看并连接设备\n$ `);
-      } else {
-        setOutput(prev => prev + `\n⚠️ 未发现设备\n💡 请确保 shadowd 正在运行\n$ `);
-      }
-    } catch (error) {
-      console.error('Failed to load devices:', error);
-      Alert.alert(
-        '加载失败',
-        '无法加载设备列表，请检查网络连接',
-        [{ text: '确定' }]
-      );
-      setDevices([]);
-    } finally {
-      setLoadingDevices(false);
-    }
-  };
+  // ✨ 使用 useMemo 缓存计算结果
+  const { onlineCount, offlineCount } = useMemo(() => ({
+    onlineCount: devices.filter(d => d.online).length,
+    offlineCount: devices.length - devices.filter(d => d.online).length,
+  }), [devices]);
 
   const backgroundStyle = {
     backgroundColor: isDarkMode ? '#1a1a1a' : '#f5f5f5',
     flex: 1,
   };
-
-  // Show loading screen while checking auth state
-  if (authLoading) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={themeColors.background}
-        />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
-            加载中...
-          </Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  // Show login screen if not authenticated
-  if (!isLoggedIn) {
-    return (
-      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <StatusBar
-          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-          backgroundColor={themeColors.background}
-        />
-        <LoginScreen />
-      </SafeAreaView>
-    );
-  }
-
-  const toggleVPN = () => {
+  // ✨ 使用 useCallback 缓存 VPN 切换函数
+  const toggleVPN = useCallback(() => {
     const newState = !vpnConnected;
     setVpnConnected(newState);
     
@@ -187,9 +136,10 @@ function App(): React.JSX.Element {
     }
     
     setOutput(prev => prev + `\nVPN ${newState ? '已连接' : '已断开'}\n$ `);
-  };
+  }, [vpnConnected]);
 
-  const executeCommand = async () => {
+  // ✨ 缓存命令执行函数
+  const executeCommand = useCallback(async () => {
     if (!command.trim()) return;
     
     if (!homeTerminalConnected || !homeTerminalDevice) {
@@ -203,9 +153,6 @@ function App(): React.JSX.Element {
     
     try {
       // TODO: 实际发送命令到 SSH 服务
-      // const result = await sshService.executeCommand(homeTerminalDevice, command);
-      // setOutput(prev => prev + result + '\n$ ');
-      
       // 临时模拟响应
       setOutput(prev => prev + `正在 ${homeTerminalDevice.name} 上执行命令...\n$ `);
     } catch (error) {
@@ -213,14 +160,10 @@ function App(): React.JSX.Element {
     }
     
     setCommand('');
-  };
+  }, [command, homeTerminalConnected, homeTerminalDevice]);
 
-  // Calculate device counts
-  const onlineCount = devices.filter(d => d.online).length;
-  const offlineCount = devices.length - onlineCount;
-
-  // 处理设备点击（从设备列表）
-  const handleDevicePress = (device: Device) => {
+  // ✨ 缓存设备点击处理函数
+  const handleDevicePress = useCallback((device: Device) => {
     if (!device.online) {
       Alert.alert(
         '设备离线',
@@ -229,13 +172,11 @@ function App(): React.JSX.Element {
       );
       return;
     }
-
-    // 设置选中的设备，保持在 dashboard，但会触发终端显示
     setSelectedDevice(device);
-  };
+  }, []);
 
   // 切换首页终端连接的设备
-  const switchHomeTerminalDevice = (device: Device) => {
+  const switchHomeTerminalDevice = useCallback((device: Device) => {
     if (!device.online) {
       Alert.alert(
         '设备离线',
@@ -248,10 +189,10 @@ function App(): React.JSX.Element {
     setHomeTerminalDevice(device);
     setHomeTerminalConnected(true);
     setOutput(prev => prev + `\n已切换到 ${device.name} (${device.meshIP})\n$ `);
-  };
+  }, []);
 
-  // 格式化最后在线时间
-  const formatLastSeen = (date: Date): string => {
+  // ✨ 使用 useCallback 缓存工具函数
+  const formatLastSeen = useCallback((date: Date): string => {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
@@ -262,10 +203,10 @@ function App(): React.JSX.Element {
     if (minutes < 60) return `${minutes} 分钟前`;
     if (hours < 24) return `${hours} 小时前`;
     return `${days} 天前`;
-  };
+  }, []);
 
-  // 获取设备图标
-  const getDeviceIcon = (device: Device): string => {
+  // ✨ 使用 useCallback 缓存设备图标函数
+  const getDeviceIcon = useCallback((device: Device): string => {
     if (device.hostname.includes('mac') || device.hostname.includes('Mac')) {
       return '💻';
     }
@@ -276,7 +217,7 @@ function App(): React.JSX.Element {
       return '🐧';
     }
     return '💻';
-  };
+  }, []);
 
   // 简单的导航对象
   const navigation = {
@@ -285,10 +226,8 @@ function App(): React.JSX.Element {
         setSelectedDevice(params?.device);
         handleTabChange('dashboard'); // 暂时保持在 dashboard，后续可以添加专门的终端 tab
       } else if (screen === 'QRScanner') {
-        // 打开 QR 扫描模态框
         setShowAddDeviceModal(false);
-        // TODO: 实现 QR 扫描页面
-        Alert.alert('扫码功能', '扫码功能开发中...\n请使用手动输入方式添加设备');
+        setShowQRScanner(true);
       } else if (screen === 'AIChat') {
         // AI 对话需要设备参数
         if (params?.device) {
@@ -328,9 +267,6 @@ function App(): React.JSX.Element {
       // 添加到 store
       await addDeviceToStore(newDevice);
 
-      // 添加到本地列表
-      setDevices(prev => [...prev, newDevice]);
-
       Alert.alert(
         '添加成功',
         `设备 ${newDevice.name} 已添加\n正在测试连接...`,
@@ -349,15 +285,62 @@ function App(): React.JSX.Element {
     navigation.navigate('QRScanner');
   };
 
+  // ⚠️ 注意：所有 hooks 已经在上面定义完毕，
+  // 从这里开始可以根据状态做条件渲染（早返回），不会再新增 hooks。
+
+  // Show loading screen while checking auth state
+  if (authLoading) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
+            加载中...
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show login screen if not authenticated
+  if (!isLoggedIn) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <LoginScreen />
+      </SafeAreaView>
+    );
+  }
+
   // 如果在设备列表页面（通过 dashboard 显示）
   if (currentTab === 'dashboard' && devices.length > 0 && !selectedDevice) {
     // 显示完整设备列表
     // 暂时保持在 dashboard，后续可以添加专门的设备列表视图
   }
 
-  // 如果在终端页面
-  if (selectedDevice && currentTab === 'dashboard') {
-    // 这里可以显示终端，但暂时保持原有逻辑
+  // 如果正在展示二维码扫描界面，独占全屏（无底部导航）
+  if (showQRScanner) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <QRScannerScreen
+          navigation={{
+            ...navigation,
+            goBack: () => setShowQRScanner(false),
+          }}
+        />
+      </SafeAreaView>
+    );
   }
 
   // 如果选中了设备且在 dashboard，显示终端页面（全屏，无底部导航）

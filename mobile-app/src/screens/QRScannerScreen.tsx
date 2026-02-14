@@ -3,7 +3,7 @@
  * Scans QR codes to pair new devices using camera
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,6 @@ import {
   Alert,
   TouchableOpacity,
   Linking,
-  Platform,
-  useColorScheme,
 } from 'react-native';
 import QRCodeScanner from 'react-native-qrcode-scanner';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -21,6 +19,7 @@ import { getQRCodeService } from '../services/qrCodeService';
 import { createGRPCClient } from '../services/grpcClient';
 import { Header } from '../components/Header';
 import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { check, request, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
 
 interface QRScannerScreenProps {
   navigation: any;
@@ -28,19 +27,11 @@ interface QRScannerScreenProps {
 
 export const QRScannerScreen: React.FC<QRScannerScreenProps> = ({ navigation }) => {
   const [scanning, setScanning] = useState(true);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [showInstructions, setShowInstructions] = useState(true);
   const { addDevice } = useDeviceStore();
   const qrService = getQRCodeService();
   const isDarkMode = true; // 强制 Dark 模式
   const themeColors = getThemeColors(isDarkMode);
-  
-  useEffect(() => {
-    checkCameraPermission();
-  }, []);
-  
-  const checkCameraPermission = async () => {
-    setHasPermission(true);
-  };
   
   const handleQRCodeScanned = async (e: any) => {
     if (!scanning) return;
@@ -85,56 +76,6 @@ export const QRScannerScreen: React.FC<QRScannerScreenProps> = ({ navigation }) 
     handleQRCodeScanned({ data: testQRData });
   };
   
-  if (hasPermission === null) {
-    return (
-      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <Header
-          title="扫描二维码"
-          showBack
-          onBack={() => navigation.goBack()}
-        />
-        <View style={styles.centerContent}>
-          <Icon name="camera" size={64} color={themeColors.textSecondary} />
-          <Text style={[styles.message, { color: themeColors.textPrimary }]}>
-            正在请求相机权限...
-          </Text>
-        </View>
-      </View>
-    );
-  }
-  
-  if (hasPermission === false) {
-    return (
-      <View style={[styles.container, { backgroundColor: themeColors.background }]}>
-        <Header
-          title="扫描二维码"
-          showBack
-          onBack={() => navigation.goBack()}
-        />
-        <View style={styles.centerContent}>
-          <Icon name="camera-off" size={64} color={colors.error} />
-          <Text style={[styles.message, { color: themeColors.textPrimary }]}>
-            需要相机权限才能扫描二维码
-          </Text>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.primary }]}
-            onPress={() => Linking.openSettings()}
-          >
-            <Icon name="settings" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-            <Text style={styles.buttonText}>打开设置</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: themeColors.surface }]}
-            onPress={() => navigation.goBack()}
-          >
-            <Icon name="arrow-back" size={20} color={themeColors.textPrimary} style={styles.buttonIcon} />
-            <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>返回</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-  
   return (
     <View style={styles.container}>
       <View style={[styles.header, { backgroundColor: 'rgba(0, 0, 0, 0.95)' }]}>
@@ -145,83 +86,97 @@ export const QRScannerScreen: React.FC<QRScannerScreenProps> = ({ navigation }) 
           <Icon name="arrow-back" size={24} color={colors.primary} />
           <Text style={[styles.backButtonText, { color: colors.primary }]}>返回</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, { color: '#FFFFFF' }]}>扫描二维码</Text>
-        <Text style={[styles.subtitle, { color: '#CCCCCC' }]}>
-          将相机对准电脑上显示的二维码
-        </Text>
+        <View style={styles.headerText}>
+          <Text style={[styles.title, { color: '#FFFFFF' }]}>扫描二维码</Text>
+          <Text style={[styles.subtitle, { color: '#CCCCCC' }]}>
+            将相机对准电脑上显示的二维码
+          </Text>
+        </View>
       </View>
       
-      <QRCodeScanner
-        onRead={handleQRCodeScanned}
-        reactivate={scanning}
-        reactivateTimeout={3000}
-        showMarker={true}
-        markerStyle={styles.marker}
-        cameraStyle={styles.camera}
-        topContent={<View />}
-        bottomContent={
-          <View style={[styles.actions, { backgroundColor: 'rgba(0, 0, 0, 0.95)' }]}>
-            <TouchableOpacity
-              style={[styles.testButton, { backgroundColor: colors.primary }]}
-              onPress={handleManualTest}
-              disabled={!scanning}
-            >
-              <Icon name="devices" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-              <Text style={styles.testButtonText}>
-                {scanning ? '使用测试设备' : '处理中...'}
-              </Text>
-            </TouchableOpacity>
-            
-            <View style={[styles.instructions, { borderTopColor: '#333' }]}>
+      <View style={styles.scannerContainer}>
+        <QRCodeScanner
+          onRead={handleQRCodeScanned}
+          reactivate={scanning}
+          reactivateTimeout={3000}
+          showMarker={true}
+          markerStyle={styles.marker}
+          cameraStyle={styles.camera}
+          topViewStyle={styles.cameraTop}
+          bottomViewStyle={styles.cameraBottom}
+        />
+      </View>
+
+      <View style={[styles.actions, { backgroundColor: 'rgba(0, 0, 0, 0.95)' }]}>
+        <TouchableOpacity
+          style={[styles.testButton, { backgroundColor: colors.primary }]}
+          onPress={handleManualTest}
+          disabled={!scanning}
+        >
+          <Icon name="devices" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+          <Text style={styles.testButtonText}>
+            {scanning ? '使用测试设备' : '处理中...'}
+          </Text>
+        </TouchableOpacity>
+
+        {showInstructions && (
+          <View style={[styles.instructions, { borderTopColor: '#333' }]}>
+            <View style={styles.instructionsHeaderRow}>
               <View style={styles.instructionHeader}>
                 <Icon name="info-outline" size={24} color={colors.primary} />
                 <Text style={[styles.instructionsTitle, { color: '#FFFFFF' }]}>
                   配对步骤
                 </Text>
               </View>
-              
-              <View style={styles.instructionStep}>
-                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>1</Text>
-                </View>
-                <View style={styles.stepContent}>
-                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
-                    在要访问的设备上运行：
-                  </Text>
-                  <View style={[styles.codeBlock, { backgroundColor: '#1A1A1A' }]}>
-                    <Icon name="terminal" size={16} color={colors.success} style={styles.codeIcon} />
-                    <Text style={[styles.instructionsCode, { color: colors.success }]}>
-                      shadowd generate-qr
-                    </Text>
-                  </View>
-                </View>
+              <TouchableOpacity
+                onPress={() => setShowInstructions(false)}
+                style={styles.closeInstructionsButton}
+              >
+                <Icon name="close" size={18} color="#888888" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.instructionStep}>
+              <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                <Text style={styles.stepNumberText}>1</Text>
               </View>
-              
-              <View style={styles.instructionStep}>
-                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>2</Text>
-                </View>
-                <View style={styles.stepContent}>
-                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
-                    用此应用扫描显示的二维码
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.instructionStep}>
-                <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.stepNumberText}>3</Text>
-                </View>
-                <View style={styles.stepContent}>
-                  <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
-                    设备将被自动添加到列表中
+              <View style={styles.stepContent}>
+                <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                  在要访问的设备上运行：
+                </Text>
+                <View style={[styles.codeBlock, { backgroundColor: '#1A1A1A' }]}>
+                  <Icon name="terminal" size={16} color={colors.success} style={styles.codeIcon} />
+                  <Text style={[styles.instructionsCode, { color: colors.success }]}>
+                    shadowd-generate-qr
                   </Text>
                 </View>
               </View>
             </View>
+            
+            <View style={styles.instructionStep}>
+              <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                <Text style={styles.stepNumberText}>2</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                  用此应用扫描终端中显示的二维码
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.instructionStep}>
+              <View style={[styles.stepNumber, { backgroundColor: colors.primary }]}>
+                <Text style={styles.stepNumberText}>3</Text>
+              </View>
+              <View style={styles.stepContent}>
+                <Text style={[styles.instructionsText, { color: '#CCCCCC' }]}>
+                  设备将被自动添加到列表中
+                </Text>
+              </View>
+            </View>
           </View>
-        }
-      />
+        )}
+      </View>
     </View>
   );
 };
@@ -238,14 +193,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   header: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing['2xl'],
+    paddingBottom: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: '#333',
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.md,
   },
   backButtonText: {
     fontSize: typography.fontSize.base,
@@ -260,14 +220,26 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: typography.fontSize.sm,
   },
+  headerText: {
+    flex: 1,
+  },
   message: {
     fontSize: typography.fontSize.base,
     textAlign: 'center',
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
+  scannerContainer: {
+    flex: 1,
+  },
   camera: {
-    height: 400,
+    height: '100%',
+  },
+  cameraTop: {
+    flex: 1,
+  },
+  cameraBottom: {
+    flex: 1,
   },
   marker: {
     borderColor: colors.success,
@@ -312,6 +284,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     borderTopWidth: 1,
   },
+  instructionsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   instructionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,6 +298,9 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.lg,
     fontWeight: typography.fontWeight.semibold,
     marginLeft: spacing.sm,
+  },
+  closeInstructionsButton: {
+    padding: spacing.xs,
   },
   instructionStep: {
     flexDirection: 'row',
