@@ -64,6 +64,7 @@ cd shadowd
 ```
 
 Shadowd 将启动以下服务：
+
 - SSH Server (端口 2222)
 - WebSocket SSH 代理 (端口 8022)
 - gRPC Server (端口 50052)
@@ -117,24 +118,35 @@ headscale:
 ## 📱 移动端使用
 
 ### 连接 VPN
+
 1. 打开应用
-2. 点击 "Connect VPN" 按钮
-3. 等待连接成功
+2. 点击「连接 VPN」按钮
+3. 等待连接成功（跨网访问需先配置 Headscale，见 [跨网访问部署](docs/CROSS_NETWORK_SETUP.md)）
 
 ### 添加设备
-1. 在目标设备上运行: `shadowd generate-qr`
-2. 在应用中点击 "+" 按钮
-3. 扫描二维码
-4. 设备自动添加
+
+**方式一：手动添加（推荐）**
+
+1. 在应用中点击右下角 "+" 按钮
+2. 填写 IP 地址、SSH 端口、用户名、密码
+3. 点击「添加设备」完成添加
+
+**方式二：扫码配对**
+
+1. 在目标设备上运行: `shadowd-generate-qr`（或 macOS 使用一键部署应用）
+2. 在应用中点击 "+" → 选择「扫描二维码」
+3. 扫描二维码后设备自动添加
 
 ### 访问终端
+
 1. 从设备列表选择设备
-2. 自动建立 SSH 连接
+2. 进入 SSH 终端，自动建立 WebSocket 连接
 3. 输入命令并执行
-4. 完成后点击 "Disconnect"
+4. 可在「历史」页查看命令历史
 
 ## 📚 文档
 
+- [介绍网站](web/README.md) - 项目介绍单页（`cd web && npm run dev` 本地预览）
 - [快速开始](QUICK_START.md) - 5 分钟快速上手
 - [部署指南](DEPLOYMENT.md) - 本地部署和配置
 - [跨网访问部署](docs/CROSS_NETWORK_SETUP.md) - 互联网远程控制配置 ⭐
@@ -147,18 +159,21 @@ headscale:
 ## 🔒 安全特性
 
 ### 网络安全
+
 - ✅ 私有 Mesh 网络 (100.64.0.0/10)
 - ✅ WireGuard 端到端加密
 - ✅ 零信任网络架构
 - ✅ 网络隔离和访问控制
 
 ### 认证安全
+
 - ✅ SSH 密钥认证（禁用密码）
 - ✅ 设备指纹验证
 - ✅ 配对码时间戳验证（防重放）
 - ✅ 平台安全存储（Keychain/KeyStore）
 
 ### 通信安全
+
 - ✅ 所有流量加密传输
 - ✅ 仅 Mesh 网络内可访问
 - ✅ 自动密钥轮换（规划中）
@@ -167,12 +182,14 @@ headscale:
 ## 🛠️ 技术栈
 
 ### 后端
+
 - **语言**: Go 1.25+
 - **网络**: WireGuard, gRPC
 - **服务**: systemd, launchd, Windows Service
 - **测试**: Go testing, testify
 
 ### 前端
+
 - **框架**: React Native 0.73
 - **语言**: TypeScript 5.0
 - **状态管理**: Zustand 4.4
@@ -180,6 +197,7 @@ headscale:
 - **存储**: AsyncStorage
 
 ### 基础设施
+
 - **协调**: Headscale (Docker)
 - **容器**: Docker Compose
 - **配置**: YAML
@@ -188,36 +206,42 @@ headscale:
 
 ### 当前版本: 0.2.0
 
-| 模块 | 状态 | 完成度 |
-|------|------|--------|
-| Shadowd WebSocket 代理 | ✅ 完成 | 100% |
-| 移动端 SSH 终端 | ✅ 完成 | 100% |
-| WebSocket 连接 | ✅ 完成 | 100% |
-| 密码认证 | ✅ 完成 | 100% |
-| 设备管理 | 🚧 开发中 | 80% |
-| VPN 集成 | 📋 计划中 | 0% |
+| 模块                   | 状态      | 完成度 |
+| ---------------------- | --------- | ------ |
+| Shadowd WebSocket 代理 | ✅ 完成   | 100%   |
+| 移动端 SSH 终端        | ✅ 完成   | 100%   |
+| WebSocket 连接         | ✅ 完成   | 100%   |
+| 密码认证               | ✅ 完成   | 100%   |
+| 设备管理（添加/删除/发现） | ✅ 完成   | 100%   |
+| 命令历史               | ✅ 完成   | 100%   |
+| 设备发现（mDNS/HTTP）   | ✅ 完成   | 100%   |
+| VPN 集成（WireGuard/Headscale） | 🚧 开发中 | 需部署 Headscale |
 
 ## 🗺️ 路线图
 
 ### Phase 1: 核心功能 ✅
-- [x] Shadowd WebSocket SSH 代理
-- [x] 移动端终端界面
-- [x] 密码认证
-- [x] 实时命令执行
+
+- [X] Shadowd WebSocket SSH 代理
+- [X] 移动端终端界面
+- [X] 密码认证
+- [X] 实时命令执行
 
 ### Phase 2: 功能增强 (进行中)
+
 - [ ] SSH 密钥认证
 - [ ] 设备分组管理
-- [ ] 命令历史记录
+- [X] 命令历史记录
 - [ ] 文件传输 (SFTP)
 
-### Phase 3: VPN 集成 (计划中)
-- [ ] WireGuard 集成
+### Phase 3: VPN 集成 (进行中)
+
+- [ ] WireGuard 集成（需配合 Headscale 部署）
 - [ ] Headscale 服务器集成
 - [ ] Mesh 网络支持
-- [ ] 设备自动发现
+- [X] 设备自动发现（mDNS + HTTP API）
 
 ### Phase 4: 企业功能 (未来)
+
 - [ ] 多用户管理
 - [ ] 权限控制
 - [ ] 审计日志
@@ -255,7 +279,7 @@ npm run ios
 
 - **问题反馈**: [GitHub Issues](https://github.com/your-repo/issues)
 - **功能建议**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **邮箱**: your-email@example.com
+- **邮箱**: 3241292694@qq.com
 
 ## 🌟 Star History
 
