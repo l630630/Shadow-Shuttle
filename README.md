@@ -1,11 +1,19 @@
-# Shadow Shuttle (影梭)
+<div align="center">
+  <img src="assets/logo.svg" alt="Shadow Shuttle Logo" width="120" height="120">
+  
+  # Shadow Shuttle (影梭)
 
-**安全的远程 SSH 访问解决方案**
+  **安全的远程 SSH 访问解决方案**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://golang.org)
-[![React Native](https://img.shields.io/badge/react--native-0.73-61DAFB.svg)](https://reactnative.dev)
-[![Status](https://img.shields.io/badge/status-MVP-green.svg)](MVP_DEPLOYMENT_GUIDE.md)
+  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+  [![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://golang.org)
+  [![React Native](https://img.shields.io/badge/react--native-0.73-61DAFB.svg)](https://reactnative.dev)
+  [![Status](https://img.shields.io/badge/status-MVP-green.svg)](MVP_DEPLOYMENT_GUIDE.md)
+
+  [English](README.md) | [中文文档](docs/README_CN.md) | [官方网站](https://l630630.github.io/Shadow-Shuttle/)
+</div>
+
+---
 
 ## 🎯 项目简介
 
