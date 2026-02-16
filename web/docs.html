@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文档 - Shadow Shuttle (影梭)</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <script>
+      // 防止主题闪烁：在页面加载前立即应用主题
+      (function() {
+        const theme = localStorage.getItem('shadow-shuttle-theme') || 'dark';
+        if (theme === 'light') {
+          document.documentElement.classList.add('light-mode');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/docs.tsx"></script>
+  </body>
+</html>
