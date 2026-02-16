@@ -69,3 +69,4 @@ headscale/data/*.key
 .env
 .env.local
 .env.*.local
+index.html.backup
