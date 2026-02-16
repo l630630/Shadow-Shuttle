@@ -5,6 +5,12 @@ import { Logo } from './components/Logo';
 
 const GITHUB_REPO = 'https://github.com/l630630/Shadow-Shuttle';
 
+// 获取正确的路径（支持 GitHub Pages）
+const getPath = (path: string) => {
+  const base = import.meta.env.BASE_URL || '/';
+  return base + path.replace(/^\//, '');
+};
+
 interface DocsPageProps {
   theme: Theme;
   lang: Lang;
@@ -67,19 +73,19 @@ const DocsPage: React.FC<DocsPageProps> = ({
             </a>
             <div className="hidden md:flex items-center gap-6">
               <a
-                href="/"
+                href={getPath('')}
                 className={`text-sm transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
               >
                 {lang === 'zh' ? '首页' : 'Home'}
               </a>
               <a
-                href={lang === 'zh' ? '/docs.html' : '/docs-en.html'}
+                href={getPath(lang === 'zh' ? 'docs.html' : 'docs-en.html')}
                 className={`text-sm font-medium ${theme === 'dark' ? 'text-emerald-400' : 'text-emerald-600'}`}
               >
                 {lang === 'zh' ? '中文文档' : 'Documentation'}
               </a>
               <a
-                href={lang === 'zh' ? '/docs-en.html' : '/docs.html'}
+                href={getPath(lang === 'zh' ? 'docs-en.html' : 'docs.html')}
                 className={`text-sm transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
               >
                 {lang === 'zh' ? 'English Documentation' : '中文文档'}

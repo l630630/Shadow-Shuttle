@@ -11,6 +11,9 @@
   [![Status](https://img.shields.io/badge/status-MVP-green.svg)](MVP_DEPLOYMENT_GUIDE.md)
 
   [English](README.md) | [中文文档](docs/README_CN.md) | [官方网站](https://l630630.github.io/Shadow-Shuttle/)
+
+  **💻 本地预览网站**: `cd web && npm install && npm run dev`
+
 </div>
 
 ---

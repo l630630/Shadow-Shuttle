@@ -5,6 +5,12 @@ import { Logo } from './components/Logo';
 
 const GITHUB_REPO = 'https://github.com/l630630/Shadow-Shuttle';
 
+// 获取正确的路径（支持 GitHub Pages）
+const getPath = (path: string) => {
+  const base = import.meta.env.BASE_URL || '/';
+  return base + path.replace(/^\//, '');
+};
+
 interface LandingPageProps {
   theme: Theme;
   lang: Lang;
@@ -39,13 +45,13 @@ const LandingPage: React.FC<LandingPageProps> = ({
               首页
             </a>
             <a
-              href="/docs.html"
+              href={getPath('docs.html')}
               className={`text-sm transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
             >
               中文文档
             </a>
             <a
-              href="/docs-en.html"
+              href={getPath('docs-en.html')}
               className={`text-sm transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-slate-200' : 'text-gray-600 hover:text-gray-900'}`}
             >
               English Documentation
@@ -113,14 +119,14 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </p>
           <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
             <a
-              href={lang === 'zh' ? '/docs.html' : '/docs-en.html'}
+              href={getPath(lang === 'zh' ? 'docs.html' : 'docs-en.html')}
               className="group h-14 rounded-full bg-gradient-to-r from-primary to-blue-600 px-8 text-base font-semibold text-white shadow-xl shadow-primary/30 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/40 active:scale-95 flex items-center gap-2"
             >
               {t.hero.cta}
               <span className="material-symbols-outlined text-[20px] transition-transform group-hover:translate-x-1">arrow_forward</span>
             </a>
             <a
-              href={lang === 'zh' ? '/docs.html' : '/docs-en.html'}
+              href={getPath(lang === 'zh' ? 'docs.html' : 'docs-en.html')}
               className={`group h-14 rounded-full border-2 px-8 text-base font-medium flex items-center gap-2 transition-all hover:scale-105 ${c.btnSecondary}`}
             >
               {t.hero.viewCode}
@@ -271,7 +277,7 @@ const LandingPage: React.FC<LandingPageProps> = ({
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a
-              href="/docs.html"
+              href={getPath('docs.html')}
               className="group inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-xl shadow-primary/30 transition-all hover:scale-105 hover:shadow-2xl hover:shadow-primary/40"
             >
               <span className="material-symbols-outlined text-[24px]">description</span>
