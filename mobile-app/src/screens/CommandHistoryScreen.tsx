@@ -32,7 +32,10 @@ import { commandFavoriteStore } from '../stores/commandFavoriteStore';
 import { useDeviceStore } from '../stores/deviceStore';
 import { HistoryEntry, HistoryFilter } from '../types/nlc';
 import { Header } from '../components/Header';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
+import { EmptyState } from '../components/EmptyState';
+import { BottomSheetModal } from '../components/BottomSheetModal';
 
 /**
  * Command History Screen Props
@@ -51,8 +54,7 @@ interface CommandHistoryScreenProps {
  * Requirement 6.5: Filter by device, time range, and search
  */
 export const CommandHistoryScreen: React.FC<CommandHistoryScreenProps> = ({ navigation }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
   
   // State
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -414,118 +416,103 @@ export const CommandHistoryScreen: React.FC<CommandHistoryScreenProps> = ({ navi
     if (!selectedEntry) return null;
 
     return (
-      <Modal
+      <BottomSheetModal
         visible={showDetailModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowDetailModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: themeColors.border }]}>
-              <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>
-                命令详情
+        onClose={() => setShowDetailModal(false)}
+        title="命令详情"
+        footer={
+          <>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonPrimary, shadows.sm]}
+              onPress={() => {
+                setShowDetailModal(false);
+                reExecuteCommand(selectedEntry);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalButtonText}>重新执行</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: themeColors.surfaceDarker }]}
+              onPress={() => setShowDetailModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
+                关闭
               </Text>
-              <TouchableOpacity onPress={() => setShowDetailModal(false)}>
-                <Text style={[styles.closeButton, { color: themeColors.textMuted }]}>✕</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+          </>
+        }
+      >
+        <View style={styles.detailSection}>
+          <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>设备</Text>
+          <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
+            {getDeviceName(selectedEntry)}
+          </Text>
+        </View>
 
-            <ScrollView style={styles.modalBody}>
-              <View style={styles.detailSection}>
-                <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>设备</Text>
-                <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
-                  {getDeviceName(selectedEntry)}
-                </Text>
-              </View>
+        <View style={styles.detailSection}>
+          <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>时间</Text>
+          <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
+            {new Date(selectedEntry.timestamp).toLocaleString('zh-CN')}
+          </Text>
+        </View>
 
-              <View style={styles.detailSection}>
-                <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>时间</Text>
-                <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
-                  {new Date(selectedEntry.timestamp).toLocaleString('zh-CN')}
-                </Text>
-              </View>
+        {selectedEntry.userInput && (
+          <View style={styles.detailSection}>
+            <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>用户输入</Text>
+            <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
+              {selectedEntry.userInput}
+            </Text>
+          </View>
+        )}
 
-              {selectedEntry.userInput && (
-                <View style={styles.detailSection}>
-                  <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>用户输入</Text>
-                  <Text style={[styles.detailValue, { color: themeColors.textPrimary }]}>
-                    {selectedEntry.userInput}
-                  </Text>
-                </View>
-              )}
-
-              <View style={styles.detailSection}>
-                <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>命令</Text>
-                <View style={[styles.codeBlock, { backgroundColor: themeColors.surfaceDarker }]}>
-                  <Text style={[styles.codeText, { color: themeColors.textPrimary }]}>
-                    {selectedEntry.parsedCommand}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>输出</Text>
-                <ScrollView style={[styles.outputBlock, { backgroundColor: themeColors.surfaceDarker }]}>
-                  <Text style={[styles.outputText, { color: themeColors.textPrimary }]}>
-                    {selectedEntry.output || '(无输出)'}
-                  </Text>
-                </ScrollView>
-              </View>
-
-              <View style={styles.detailSection}>
-                <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>状态</Text>
-                <View style={styles.statusRow}>
-                  <View style={[
-                    styles.statusBadge,
-                    { backgroundColor: selectedEntry.exitCode === 0 ? colors.status.success + '20' : colors.status.error + '20' },
-                  ]}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: selectedEntry.exitCode === 0 ? colors.status.success : colors.status.error }
-                    ]}>
-                      退出码: {selectedEntry.exitCode}
-                    </Text>
-                  </View>
-                  <Text style={[styles.executionTime, { color: themeColors.textMuted }]}>
-                    执行时间: {selectedEntry.executionTime}ms
-                  </Text>
-                </View>
-              </View>
-
-              {selectedEntry.isDangerous && (
-                <View style={[styles.warningSection, { backgroundColor: colors.status.warning + '20' }]}>
-                  <Text style={[styles.warningText, { color: colors.status.warning }]}>
-                    ⚠️ 此命令被标记为危险命令
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
-
-            <View style={[styles.modalActions, { borderTopColor: themeColors.border }]}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary, shadows.sm]}
-                onPress={() => {
-                  setShowDetailModal(false);
-                  reExecuteCommand(selectedEntry);
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalButtonText}>重新执行</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: themeColors.surfaceDarker }]}
-                onPress={() => setShowDetailModal(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
-                  关闭
-                </Text>
-              </TouchableOpacity>
-            </View>
+        <View style={styles.detailSection}>
+          <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>命令</Text>
+          <View style={[styles.codeBlock, { backgroundColor: themeColors.surfaceDarker }]}>
+            <Text style={[styles.codeText, { color: themeColors.textPrimary }]}>
+              {selectedEntry.parsedCommand}
+            </Text>
           </View>
         </View>
-      </Modal>
+
+        <View style={styles.detailSection}>
+          <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>输出</Text>
+          <ScrollView style={[styles.outputBlock, { backgroundColor: themeColors.surfaceDarker }]}>
+            <Text style={[styles.outputText, { color: themeColors.textPrimary }]}>
+              {selectedEntry.output || '(无输出)'}
+            </Text>
+          </ScrollView>
+        </View>
+
+        <View style={styles.detailSection}>
+          <Text style={[styles.detailLabel, { color: themeColors.textSecondary }]}>状态</Text>
+          <View style={styles.statusRow}>
+            <View style={[
+              styles.statusBadge,
+              { backgroundColor: selectedEntry.exitCode === 0 ? colors.status.success + '20' : colors.status.error + '20' },
+            ]}>
+              <Text style={[
+                styles.statusText,
+                { color: selectedEntry.exitCode === 0 ? colors.status.success : colors.status.error }
+              ]}>
+                退出码: {selectedEntry.exitCode}
+              </Text>
+            </View>
+            <Text style={[styles.executionTime, { color: themeColors.textMuted }]}>
+              执行时间: {selectedEntry.executionTime}ms
+            </Text>
+          </View>
+        </View>
+
+        {selectedEntry.isDangerous && (
+          <View style={[styles.warningSection, { backgroundColor: colors.status.warning + '20' }]}>
+            <Text style={[styles.warningText, { color: colors.status.warning }]}>
+              ⚠️ 此命令被标记为危险命令
+            </Text>
+          </View>
+        )}
+      </BottomSheetModal>
     );
   };
 
@@ -536,142 +523,126 @@ export const CommandHistoryScreen: React.FC<CommandHistoryScreenProps> = ({ navi
    * Requirement 6.5: Filter by device, time range, dangerous flag
    */
   const renderFilterModal = () => (
-    <Modal
+    <BottomSheetModal
       visible={showFilterModal}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilterModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
-          <View style={[styles.modalHeader, { borderBottomColor: themeColors.border }]}>
-            <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>
-              筛选条件
+      onClose={() => setShowFilterModal(false)}
+      title="筛选条件"
+      footer={
+        <>
+          <TouchableOpacity
+            style={[styles.modalButton, { backgroundColor: themeColors.surfaceDarker }]}
+            onPress={() => {
+              setSelectedDeviceId(undefined);
+              setTimeRange('all');
+              setShowDangerousOnly(false);
+              setCustomStartDate(null);
+              setCustomEndDate(null);
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
+              重置
             </Text>
-            <TouchableOpacity onPress={() => setShowFilterModal(false)}>
-              <Text style={[styles.closeButton, { color: themeColors.textMuted }]}>✕</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalBody}>
-            {/* Device Filter */}
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
-                设备
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.filterOption,
-                  { backgroundColor: themeColors.surfaceDarker },
-                  !selectedDeviceId && styles.filterOptionSelected,
-                ]}
-                onPress={() => setSelectedDeviceId(undefined)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
-                  全部设备
-                </Text>
-                {!selectedDeviceId && <Text style={styles.checkmark}>✓</Text>}
-              </TouchableOpacity>
-              {devices.map(device => (
-                <TouchableOpacity
-                  key={device.id}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: themeColors.surfaceDarker },
-                    selectedDeviceId === device.id && styles.filterOptionSelected,
-                  ]}
-                  onPress={() => setSelectedDeviceId(device.id)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
-                    {device.name}
-                  </Text>
-                  {selectedDeviceId === device.id && <Text style={styles.checkmark}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Time Range Filter */}
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
-                时间范围
-              </Text>
-              {[
-                { value: 'all', label: '全部时间' },
-                { value: 'today', label: '今天' },
-                { value: 'week', label: '最近7天' },
-                { value: 'month', label: '本月' },
-                { value: 'custom', label: '自定义' },
-              ].map(option => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.filterOption,
-                    { backgroundColor: themeColors.surfaceDarker },
-                    timeRange === option.value && styles.filterOptionSelected,
-                  ]}
-                  onPress={() => setTimeRange(option.value as any)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
-                    {option.label}
-                  </Text>
-                  {timeRange === option.value && <Text style={styles.checkmark}>✓</Text>}
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Dangerous Commands Filter */}
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
-                命令类型
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.filterOption,
-                  { backgroundColor: themeColors.surfaceDarker },
-                  showDangerousOnly && styles.filterOptionSelected,
-                ]}
-                onPress={() => setShowDangerousOnly(!showDangerousOnly)}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
-                  只显示危险命令
-                </Text>
-                {showDangerousOnly && <Text style={styles.checkmark}>✓</Text>}
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-
-          <View style={[styles.modalActions, { borderTopColor: themeColors.border }]}>
-            <TouchableOpacity
-              style={[styles.modalButton, { backgroundColor: themeColors.surfaceDarker }]}
-              onPress={() => {
-                // Reset filters
-                setSelectedDeviceId(undefined);
-                setTimeRange('all');
-                setShowDangerousOnly(false);
-                setCustomStartDate(null);
-                setCustomEndDate(null);
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
-                重置
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalButtonPrimary, shadows.sm]}
-              onPress={() => setShowFilterModal(false)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.modalButtonText}>应用</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modalButton, styles.modalButtonPrimary, shadows.sm]}
+            onPress={() => setShowFilterModal(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.modalButtonText}>应用</Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      {/* Device Filter */}
+      <View style={styles.filterSection}>
+        <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
+          设备
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.filterOption,
+            { backgroundColor: themeColors.surfaceDarker },
+            !selectedDeviceId && styles.filterOptionSelected,
+          ]}
+          onPress={() => setSelectedDeviceId(undefined)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
+            全部设备
+          </Text>
+          {!selectedDeviceId && <Text style={styles.checkmark}>✓</Text>}
+        </TouchableOpacity>
+        {devices.map(device => (
+          <TouchableOpacity
+            key={device.id}
+            style={[
+              styles.filterOption,
+              { backgroundColor: themeColors.surfaceDarker },
+              selectedDeviceId === device.id && styles.filterOptionSelected,
+            ]}
+            onPress={() => setSelectedDeviceId(device.id)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
+              {device.name}
+            </Text>
+            {selectedDeviceId === device.id && <Text style={styles.checkmark}>✓</Text>}
+          </TouchableOpacity>
+        ))}
       </View>
-    </Modal>
+
+      {/* Time Range Filter */}
+      <View style={styles.filterSection}>
+        <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
+          时间范围
+        </Text>
+        {[
+          { value: 'all', label: '全部时间' },
+          { value: 'today', label: '今天' },
+          { value: 'week', label: '最近7天' },
+          { value: 'month', label: '本月' },
+          { value: 'custom', label: '自定义' },
+        ].map(option => (
+          <TouchableOpacity
+            key={option.value}
+            style={[
+              styles.filterOption,
+              { backgroundColor: themeColors.surfaceDarker },
+              timeRange === option.value && styles.filterOptionSelected,
+            ]}
+            onPress={() => setTimeRange(option.value as any)}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
+              {option.label}
+            </Text>
+            {timeRange === option.value && <Text style={styles.checkmark}>✓</Text>}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Dangerous Commands Filter */}
+      <View style={styles.filterSection}>
+        <Text style={[styles.filterLabel, { color: themeColors.textPrimary }]}>
+          命令类型
+        </Text>
+        <TouchableOpacity
+          style={[
+            styles.filterOption,
+            { backgroundColor: themeColors.surfaceDarker },
+            showDangerousOnly && styles.filterOptionSelected,
+          ]}
+          onPress={() => setShowDangerousOnly(!showDangerousOnly)}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.filterOptionText, { color: themeColors.textPrimary }]}>
+            只显示危险命令
+          </Text>
+          {showDangerousOnly && <Text style={styles.checkmark}>✓</Text>}
+        </TouchableOpacity>
+      </View>
+    </BottomSheetModal>
   );
 
   /**
@@ -798,14 +769,12 @@ export const CommandHistoryScreen: React.FC<CommandHistoryScreenProps> = ({ navi
           </Text>
         </View>
       ) : filteredHistory.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="history" size={64} color={themeColors.textMuted} />
-          <Text style={[styles.emptyText, { color: themeColors.textPrimary }]}>
-            {searchQuery || selectedDeviceId || showDangerousOnly
-              ? '没有找到匹配的历史记录'
-              : '还没有命令历史'}
-          </Text>
-          {(searchQuery || selectedDeviceId || showDangerousOnly) && (
+        <EmptyState
+          icon="history"
+          title={searchQuery || selectedDeviceId || showDangerousOnly
+            ? '没有找到匹配的历史记录'
+            : '还没有命令历史'}
+          action={(searchQuery || selectedDeviceId || showDangerousOnly) ? (
             <TouchableOpacity
               style={[styles.clearFilterButton, { backgroundColor: colors.primary }]}
               onPress={() => {
@@ -816,8 +785,8 @@ export const CommandHistoryScreen: React.FC<CommandHistoryScreenProps> = ({ navi
             >
               <Text style={styles.clearFilterText}>清除筛选</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          ) : undefined}
+        />
       ) : (
         <FlatList
           data={filteredHistory}
@@ -937,18 +906,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: typography.fontSize.base,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  emptyText: {
-    fontSize: typography.fontSize.lg,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
   },
   clearFilterButton: {
     paddingHorizontal: spacing.xl,

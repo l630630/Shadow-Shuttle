@@ -11,9 +11,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  useColorScheme,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { colors, typography, spacing, layout, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, layout } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 
 export type TabId = 'dashboard' | 'ai' | 'history' | 'profile';
 
@@ -36,8 +38,9 @@ const tabs: Tab[] = [
 ];
 
 export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onTabChange }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
 
   return (
     <View style={[

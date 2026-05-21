@@ -14,13 +14,21 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Device } from '../types/device';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 
 interface DeviceCardProps {
   device: Device;
   onPress?: (device: Device) => void;
   onLongPress?: (device: Device) => void;
 }
+
+// 检测是否为 Mesh IP
+const isMeshIP = (ip: string): boolean => {
+  // Headscale/Tailscale 默认使用 100.64.0.0/10 网段
+  const meshIPPattern = /^100\.(6[4-9]|[7-9]\d|1[0-2]\d)\.\d{1,3}\.\d{1,3}$/;
+  return meshIPPattern.test(ip);
+};
 
 const getDeviceIcon = (device: Device): string => {
   const hostname = device.hostname.toLowerCase();
@@ -45,10 +53,10 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
   onPress,
   onLongPress,
 }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
   const isOnline = device.online;
   const iconColor = getDeviceIconColor(device);
+  const isMesh = isMeshIP(device.meshIP);
 
   return (
     <TouchableOpacity
@@ -80,15 +88,35 @@ export const DeviceCard: React.FC<DeviceCardProps> = ({
 
         {/* Device Info */}
         <View style={styles.info}>
-          <Text
-            style={[
-              styles.name,
-              { color: themeColors.textPrimary }
-            ]}
-            numberOfLines={1}
-          >
-            {device.name}
-          </Text>
+          <View style={styles.nameRow}>
+            <Text
+              style={[
+                styles.name,
+                { color: themeColors.textPrimary }
+              ]}
+              numberOfLines={1}
+            >
+              {device.name}
+            </Text>
+            {/* Connection Method Badge */}
+            <View style={[
+              styles.badge,
+              { backgroundColor: isMesh ? '#10B98120' : '#6B728020' }
+            ]}>
+              <Icon
+                name={isMesh ? 'vpn-lock' : 'wifi'}
+                size={12}
+                color={isMesh ? '#10B981' : '#6B7280'}
+                style={styles.badgeIcon}
+              />
+              <Text style={[
+                styles.badgeText,
+                { color: isMesh ? '#10B981' : '#6B7280' }
+              ]}>
+                {isMesh ? 'Mesh' : 'LAN'}
+              </Text>
+            </View>
+          </View>
           <Text
             style={[
               styles.ip,
@@ -145,10 +173,30 @@ const styles = StyleSheet.create({
     flex: 1,
     marginRight: spacing.sm,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
   name: {
     fontSize: typography.fontSize.base,
     fontWeight: typography.fontWeight.semibold,
-    marginBottom: spacing.xs,
+    marginRight: spacing.xs,
+    flex: 1,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeIcon: {
+    marginRight: 2,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.semibold,
   },
   ip: {
     fontSize: typography.fontSize.sm,

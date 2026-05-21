@@ -13,12 +13,14 @@ import {
   TextInput,
   Alert,
   useColorScheme,
-  Modal,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Header } from '../components/Header';
 import { commandFavoriteStore } from '../stores/commandFavoriteStore';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
+import { EmptyState } from '../components/EmptyState';
+import { BottomSheetModal } from '../components/BottomSheetModal';
 
 interface CommandFavoritesScreenProps {
   navigation: any;
@@ -29,8 +31,7 @@ export const CommandFavoritesScreen: React.FC<CommandFavoritesScreenProps> = ({ 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCommand, setNewCommand] = useState({ name: '', command: '', description: '' });
   const [favorites, setFavorites] = useState<any[]>([]);
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
 
   // Load favorites on mount
   React.useEffect(() => {
@@ -156,15 +157,11 @@ export const CommandFavoritesScreen: React.FC<CommandFavoritesScreenProps> = ({ 
   );
 
   const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Icon name="star-border" size={64} color={themeColors.textSecondary} />
-      <Text style={[styles.emptyTitle, { color: themeColors.textPrimary }]}>
-        还没有收藏命令
-      </Text>
-      <Text style={[styles.emptyDescription, { color: themeColors.textSecondary }]}>
-        点击右上角的 + 按钮添加常用命令
-      </Text>
-    </View>
+    <EmptyState
+      icon="star-border"
+      title="还没有收藏命令"
+      description="点击右上角的 + 按钮添加常用命令"
+    />
   );
 
   return (
@@ -205,102 +202,87 @@ export const CommandFavoritesScreen: React.FC<CommandFavoritesScreenProps> = ({ 
       />
 
       {/* Add Favorite Modal */}
-      <Modal
+      <BottomSheetModal
         visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: themeColors.surface }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: themeColors.textPrimary }]}>
-                添加收藏命令
+        onClose={() => setShowAddModal(false)}
+        title="添加收藏命令"
+        footer={
+          <>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: themeColors.background }]}
+              onPress={() => setShowAddModal(false)}
+            >
+              <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
+                取消
               </Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Icon name="close" size={24} color={themeColors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.modalBody}>
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
-                  命令名称 *
-                </Text>
-                <TextInput
-                  style={[styles.input, { 
-                    backgroundColor: themeColors.background,
-                    color: themeColors.textPrimary,
-                    borderColor: themeColors.border
-                  }]}
-                  placeholder="例如：查看系统信息"
-                  placeholderTextColor={themeColors.textMuted}
-                  value={newCommand.name}
-                  onChangeText={text => setNewCommand({ ...newCommand, name: text })}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
-                  命令内容 *
-                </Text>
-                <TextInput
-                  style={[styles.input, styles.commandInput, { 
-                    backgroundColor: themeColors.background,
-                    color: colors.success,
-                    borderColor: themeColors.border
-                  }]}
-                  placeholder="例如：uname -a"
-                  placeholderTextColor={themeColors.textMuted}
-                  value={newCommand.command}
-                  onChangeText={text => setNewCommand({ ...newCommand, command: text })}
-                  multiline
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
-                  描述（可选）
-                </Text>
-                <TextInput
-                  style={[styles.input, { 
-                    backgroundColor: themeColors.background,
-                    color: themeColors.textPrimary,
-                    borderColor: themeColors.border
-                  }]}
-                  placeholder="简短描述这个命令的作用"
-                  placeholderTextColor={themeColors.textMuted}
-                  value={newCommand.description}
-                  onChangeText={text => setNewCommand({ ...newCommand, description: text })}
-                  multiline
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: themeColors.background }]}
-                onPress={() => setShowAddModal(false)}
-              >
-                <Text style={[styles.modalButtonText, { color: themeColors.textPrimary }]}>
-                  取消
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: colors.primary }]}
-                onPress={handleAddFavorite}
-              >
-                <Icon name="check" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
-                  添加
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: colors.primary }]}
+              onPress={handleAddFavorite}
+            >
+              <Icon name="check" size={20} color="#FFFFFF" style={styles.buttonIcon} />
+              <Text style={[styles.modalButtonText, { color: '#FFFFFF' }]}>
+                添加
+              </Text>
+            </TouchableOpacity>
+          </>
+        }
+      >
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
+            命令名称 *
+          </Text>
+          <TextInput
+            style={[styles.input, {
+              backgroundColor: themeColors.background,
+              color: themeColors.textPrimary,
+              borderColor: themeColors.border
+            }]}
+            placeholder="例如：查看系统信息"
+            placeholderTextColor={themeColors.textMuted}
+            value={newCommand.name}
+            onChangeText={text => setNewCommand({ ...newCommand, name: text })}
+          />
         </View>
-      </Modal>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
+            命令内容 *
+          </Text>
+          <TextInput
+            style={[styles.input, styles.commandInput, {
+              backgroundColor: themeColors.background,
+              color: colors.success,
+              borderColor: themeColors.border
+            }]}
+            placeholder="例如：uname -a"
+            placeholderTextColor={themeColors.textMuted}
+            value={newCommand.command}
+            onChangeText={text => setNewCommand({ ...newCommand, command: text })}
+            multiline
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.inputLabel, { color: themeColors.textSecondary }]}>
+            描述（可选）
+          </Text>
+          <TextInput
+            style={[styles.input, {
+              backgroundColor: themeColors.background,
+              color: themeColors.textPrimary,
+              borderColor: themeColors.border
+            }]}
+            placeholder="简短描述这个命令的作用"
+            placeholderTextColor={themeColors.textMuted}
+            value={newCommand.description}
+            onChangeText={text => setNewCommand({ ...newCommand, description: text })}
+            multiline
+          />
+        </View>
+      </BottomSheetModal>
     </View>
   );
 };
@@ -397,23 +379,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.sm,
     fontSize: typography.fontSize.xs,
     fontWeight: typography.fontWeight.medium,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: spacing['5xl'],
-  },
-  emptyTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  emptyDescription: {
-    fontSize: typography.fontSize.sm,
-    textAlign: 'center',
-    paddingHorizontal: spacing.xl,
   },
   modalOverlay: {
     flex: 1,

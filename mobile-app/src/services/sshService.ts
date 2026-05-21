@@ -95,8 +95,15 @@ export class SSHService {
     
     return new Promise((resolve, reject) => {
       console.log(`Connecting to WebSocket proxy at ${this.proxyServerUrl}...`);
+      console.log('WebSocket connection details:', {
+        url: this.proxyServerUrl,
+        host: config.host,
+        port: config.port,
+        username: config.username,
+      });
       
       // Create WebSocket connection to proxy server
+      // React Native's WebSocket should handle headers automatically
       const ws = new WebSocket(this.proxyServerUrl);
       session.ws = ws;
       
@@ -278,6 +285,100 @@ export class SSHService {
     }
   }
   
+  /**
+   * 发送命令并等待输出完成（基于标记的完成检测）
+   *
+   * 原理：发送命令后追加 echo "唯一标记"，当输出流中检测到该标记时，
+   * 标记之前的内容即为命令的完整输出。
+   *
+   * @param sessionId SSH 会话 ID
+   * @param command 要执行的命令
+   * @param timeoutMs 超时时间（毫秒），默认 30 秒
+   * @returns 输出内容和是否超时
+   */
+  async writeAndWait(
+    sessionId: string,
+    command: string,
+    timeoutMs: number = 30000
+  ): Promise<{ output: string; timedOut: boolean }> {
+    const session = this.sessions.get(sessionId);
+    if (!session || !session.connected) {
+      throw new Error('Session not connected');
+    }
+
+    // 生成唯一标记，UUID 级别的随机性确保不会与命令输出冲突
+    const marker = `__SS_MARKER_${Date.now()}_${Math.random().toString(36).slice(2, 8)}__`;
+
+    return new Promise((resolve) => {
+      let buffer = '';
+      let settled = false;
+      let dataCallback: SSHDataCallback | undefined;
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+      const cleanup = () => {
+        if (dataCallback) {
+          this.offData(sessionId, dataCallback);
+        }
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle);
+        }
+      };
+
+      // 超时保护：超时后返回已收集的输出
+      timeoutHandle = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          resolve({ output: buffer, timedOut: true });
+        }
+      }, timeoutMs);
+
+      dataCallback = (data: string) => {
+        buffer += data;
+        if (buffer.includes(marker) && !settled) {
+          settled = true;
+          cleanup();
+          // 提取标记之前的输出
+          const markerIdx = buffer.indexOf(marker);
+          let rawOutput = buffer.substring(0, markerIdx);
+          // 移除 shell 回显的 echo 命令行（标记之前的最后一行）
+          const lastNewline = rawOutput.lastIndexOf('\n');
+          if (lastNewline !== -1) {
+            const lastLine = rawOutput.substring(lastNewline + 1);
+            if (lastLine.includes(marker)) {
+              rawOutput = rawOutput.substring(0, lastNewline);
+            }
+          }
+          // 清理 ANSI 控制码
+          const { cleanTerminalOutput: cleanAnsi } = require('../utils/outputFormatter');
+          const cleaned = cleanAnsi(rawOutput);
+          resolve({ output: cleaned, timedOut: false });
+        }
+      };
+
+      this.onData(sessionId, dataCallback);
+
+      // 发送命令 + 标记命令
+      if (this.useRealSSH && session.ws) {
+        session.ws.send(JSON.stringify({
+          type: 'data',
+          data: command + '\n' + 'echo "' + marker + '"\n',
+        }));
+      } else {
+        // 模拟模式：本地执行并通过回调发出输出
+        const callbacks = this.dataCallbacks.get(sessionId);
+        if (callbacks) {
+          callbacks.forEach(cb => cb(command + '\n'));
+          this.simulateCommandExecution(sessionId, command).then(() => {
+            if (!settled) {
+              callbacks.forEach(cb => cb(marker + '\n'));
+            }
+          });
+        }
+      }
+    });
+  }
+
   /**
    * Write data to SSH session (send command)
    */

@@ -75,6 +75,11 @@ func NewServer(config Config, log *logrus.Logger) *Server {
 				// In production, you should check the origin
 				return true
 			},
+			// Add more lenient settings for React Native compatibility
+			ReadBufferSize:  1024,
+			WriteBufferSize: 1024,
+			// Don't enforce strict WebSocket protocol checks
+			EnableCompression: false,
 		},
 		ctx:    ctx,
 		cancel: cancel,
@@ -125,9 +130,25 @@ func (s *Server) Stop() error {
 
 // handleWebSocket handles WebSocket connections
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	// Log incoming request details for debugging
+	s.log.WithFields(logrus.Fields{
+		"remote_addr":          r.RemoteAddr,
+		"method":               r.Method,
+		"url":                  r.URL.String(),
+		"sec_websocket_key":    r.Header.Get("Sec-WebSocket-Key"),
+		"sec_websocket_version": r.Header.Get("Sec-WebSocket-Version"),
+		"upgrade":              r.Header.Get("Upgrade"),
+		"connection":           r.Header.Get("Connection"),
+		"origin":               r.Header.Get("Origin"),
+		"user_agent":           r.Header.Get("User-Agent"),
+	}).Info("WebSocket upgrade request received")
+	
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		s.log.WithError(err).Error("Failed to upgrade WebSocket connection")
+		s.log.WithError(err).WithFields(logrus.Fields{
+			"remote_addr": r.RemoteAddr,
+			"headers":     r.Header,
+		}).Error("Failed to upgrade WebSocket connection")
 		return
 	}
 	defer conn.Close()

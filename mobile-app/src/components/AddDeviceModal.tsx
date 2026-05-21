@@ -19,13 +19,16 @@ import {
   Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 
 interface AddDeviceModalProps {
   visible: boolean;
   onClose: () => void;
   onManualAdd: (ip: string, port: string, username: string, password: string) => Promise<void>;
   onScanQR: () => void;
+  vpnConnected?: boolean;
+  meshIP?: string;
 }
 
 type AddMode = 'select' | 'manual';
@@ -35,6 +38,8 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   onClose,
   onManualAdd,
   onScanQR,
+  vpnConnected = false,
+  meshIP,
 }) => {
   // 默认直接进入「手动输入」模式，避免用户额外多点一步
   const [mode, setMode] = useState<AddMode>('manual');
@@ -47,8 +52,7 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const isDarkMode = true;
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
 
   const handleClose = () => {
     // 关闭时重置为手动模式（下次打开仍然直接显示表单）
@@ -199,10 +203,28 @@ export const AddDeviceModal: React.FC<AddDeviceModalProps> = ({
 
         {/* Form */}
         <View style={styles.form}>
+          {/* VPN Mesh IP Hint */}
+          {vpnConnected && meshIP && (
+            <View style={[styles.meshHintBox, { backgroundColor: `${colors.primary}15` }]}>
+              <Icon name="vpn-lock" size={20} color={colors.primary} />
+              <View style={styles.meshHintContent}>
+                <Text style={[styles.meshHintTitle, { color: colors.primary }]}>
+                  VPN 已连接
+                </Text>
+                <Text style={[styles.meshHintText, { color: themeColors.textSecondary }]}>
+                  您可以使用 Mesh IP 连接设备，或使用局域网 IP
+                </Text>
+                <Text style={[styles.meshHintIP, { color: colors.primary }]}>
+                  您的 Mesh IP: {meshIP}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* IP Address */}
           <View style={styles.formGroup}>
             <Text style={[styles.label, { color: themeColors.textSecondary }]}>
-              IP 地址 *
+              IP 地址 *（建议填写电脑在当前 Wi‑Fi 下的局域网 IP）
             </Text>
             <View style={[styles.inputContainer, { backgroundColor: themeColors.surfaceDarker }]}>
               <Icon name="computer" size={20} color={themeColors.textSecondary} />
@@ -487,6 +509,32 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.fontSize.xs,
     lineHeight: 18,
+  },
+  meshHintBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    gap: spacing.sm,
+  },
+  meshHintContent: {
+    flex: 1,
+  },
+  meshHintTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.semibold,
+    marginBottom: 4,
+  },
+  meshHintText: {
+    fontSize: typography.fontSize.xs,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  meshHintIP: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+    fontFamily: typography.fontFamily.mono,
   },
   submitButton: {
     flexDirection: 'row',

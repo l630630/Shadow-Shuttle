@@ -18,7 +18,8 @@ import { useDeviceStore } from '../stores/deviceStore';
 import { getQRCodeService } from '../services/qrCodeService';
 import { createGRPCClient } from '../services/grpcClient';
 import { Header } from '../components/Header';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 import { check, request, PERMISSIONS, RESULTS, openSettings } from 'react-native-permissions';
 
 interface QRScannerScreenProps {
@@ -30,8 +31,7 @@ export const QRScannerScreen: React.FC<QRScannerScreenProps> = ({ navigation }) 
   const [showInstructions, setShowInstructions] = useState(true);
   const { addDevice } = useDeviceStore();
   const qrService = getQRCodeService();
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
   
   const handleQRCodeScanned = async (e: any) => {
     if (!scanning) return;

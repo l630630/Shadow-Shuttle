@@ -228,7 +228,7 @@ func initializeSSH(cfg *config.Config, meshIP string, log *logrus.Logger) *ssh.S
 	allowedNetworks := append(cfg.SSH.AllowedNetworks, "127.0.0.1/32")
 	
 	sshConfig := ssh.Config{
-		MeshIP:             "127.0.0.1", // Listen on localhost for WebSocket proxy
+		MeshIP:             "0.0.0.0", // Listen on all interfaces for mobile app access
 		Port:               cfg.SSH.Port,
 		HostKeyPath:        cfg.SSH.HostKeyPath,
 		AuthorizedKeysPath: cfg.SSH.AuthorizedKeysPath,

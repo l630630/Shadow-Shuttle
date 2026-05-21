@@ -1,10 +1,5 @@
 /**
- * AI Chat Screen
  * AI 对话界面
- * 
- * Chat-style interface for natural language command interaction.
- * Integrates NLController, VoiceInputModule, and SuggestionEngine.
- * 
  * 用于自然语言命令交互的聊天式界面。
  * 集成自然语言控制器、语音输入模块和命令建议引擎。
  * 
@@ -18,12 +13,10 @@ import {
   TextInput,
   TouchableOpacity,
   FlatList,
-  StyleSheet,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Alert,
-  useColorScheme,
   SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -31,6 +24,7 @@ import { getNLController } from '../services/nlController';
 import { getVoiceInputModule } from '../services/voiceInputModule';
 import { getSuggestionEngine } from '../services/suggestionEngine';
 import { getSSHService, SSHConnectionConfig } from '../services/sshService';
+import { AgentExecutor } from '../services/agentExecutor';
 import { useDeviceStore } from '../stores/deviceStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { commandHistoryStore } from '../stores/commandHistoryStore';
@@ -44,7 +38,11 @@ import {
 } from '../types/nlc';
 import { Header } from '../components/Header';
 import { ChatBubble } from '../components/ChatBubble';
-import { colors, typography, spacing, borderRadius, shadows, layout, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows, layout } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
+import { EmptyState } from '../components/EmptyState';
+import { SSHPasswordCard } from '../components/SSHPasswordCard';
+import { aiChatScreenStyles as styles } from '../styles/aiChatScreen.styles';
 import { formatCommandOutput, truncateOutput, isOutputTooLong } from '../utils/outputFormatter';
 
 /**
@@ -61,15 +59,13 @@ interface AIChatScreenProps {
 }
 
 /**
- * AI Chat Screen Component
  * AI 对话界面组件
  * 
  * Requirement 8.1: Chat-style layout (top status, middle conversation, bottom input)
  * Requirement 8.2: Display user and AI message bubbles
  */
 export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
   
   // Device store
   const { devices, loadDevices } = useDeviceStore();
@@ -100,6 +96,7 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
   const voiceModule = useRef<ReturnType<typeof getVoiceInputModule> | null>(null);
   const suggestionEngine = useRef(getSuggestionEngine()).current;
   const sshService = useRef(getSSHService()).current;
+  const agentExecutor = useRef<AgentExecutor | null>(null);
   
   // Get voice module instance (lazy)
   const getVoiceModule = () => {
@@ -306,14 +303,19 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
           return;
         }
 
-        // 优先使用上次选择的提供商
+        // 优先使用上次选择的提供商，如果没有则优先使用硅基流动
         const lastSelected = await apiKeyStore.getLastSelectedProvider();
-        const provider =
-          lastSelected && configuredProviders.includes(lastSelected)
-            ? lastSelected
-            : configuredProviders[0];
+        let provider: AIProvider;
+        
+        if (lastSelected && configuredProviders.includes(lastSelected)) {
+          provider = lastSelected;
+        } else if (configuredProviders.includes('siliconflow')) {
+          provider = 'siliconflow'; // 默认使用硅基流动
+        } else {
+          provider = configuredProviders[0];
+        }
 
-        console.log('🔧 Auto-initializing AI provider:', provider, lastSelected ? '(last selected)' : '(first configured)');
+        console.log('🔧 Auto-initializing AI provider:', provider, lastSelected ? '(last selected)' : (provider === 'siliconflow' ? '(default: siliconflow)' : '(first configured)'));
         await nlController.setAIProvider(provider);
         console.log('✅ AI provider initialized:', provider);
       } catch (error) {
@@ -426,7 +428,6 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
   };
 
   /**
-   * Send message
    * 发送消息
    * 
    * Requirement 8.2: Display user message bubble immediately
@@ -434,7 +435,7 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
    */
   const sendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
-    
+
     if (!currentDevice || !activeConversation) {
       Alert.alert('错误', '请先选择一个设备');
       return;
@@ -447,140 +448,299 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
       timestamp: new Date(),
     };
 
-    // Add user message to conversation (Requirement 8.6)
     addMessage(activeConversation.id, userMessage);
     setInputText('');
     setShowSuggestions(false);
     setIsProcessing(true);
 
-    try {
-      // Build command context
-      const context: CommandContext = {
+    // 构建命令上下文
+    const context: CommandContext = {
+      currentDirectory: '~',
+      deviceInfo: {
+        id: currentDevice.id,
+        name: currentDevice.name,
+        os: currentDevice.os === 'windows' || currentDevice.os === 'macos' || currentDevice.os === 'linux'
+          ? currentDevice.os
+          : 'linux',
+        shell: 'bash',
         currentDirectory: '~',
-        deviceInfo: {
-          id: currentDevice.id,
-          name: currentDevice.name,
-          os: currentDevice.os === 'windows' || currentDevice.os === 'macos' || currentDevice.os === 'linux' 
-            ? currentDevice.os 
-            : 'linux',
-          shell: 'bash',
-          currentDirectory: '~',
-          username: 'user',
-          hostname: currentDevice.hostname,
-        },
-        recentCommands: [],
-        conversationHistory: messages,
-      };
+        username: 'user',
+        hostname: currentDevice.hostname,
+      },
+      recentCommands: [],
+      conversationHistory: messages,
+    };
 
-      // Parse natural language
-      const parseResult: ParseResult = await nlController.parseNaturalLanguage(
-        userMessage.content,
-        context
-      );
-
-      if (!parseResult.success || !parseResult.command) {
-        // ✨ 改进错误提示，提供更友好的解决方案
-        let errorContent = parseResult.error || '抱歉，我无法理解您的请求。请尝试重新描述。';
-        
-        // 检查是否是配额超限错误
-        if (errorContent.includes('Quota exceeded') || errorContent.includes('quota')) {
-          const provider = nlController.getCurrentProvider();
-          const providerName = provider === 'siliconflow' ? '硅基流动' : 
-                              provider === 'gemini' ? 'Gemini' :
-                              provider === 'openai' ? 'OpenAI' : 'Claude';
-          
-          errorContent = `😔 API 配额已用完\n\n` +
-            `您的 ${providerName} API 配额已达到限制。\n\n` +
-            `💡 解决方案：\n` +
-            `1. 等待配额重置\n` +
-            `2. 切换到其他 AI 提供商（推荐：硅基流动）\n` +
-            `3. 升级到付费版\n\n` +
-            `👉 进入"个人中心" → "AI 设置"可以切换 AI 提供商`;
-        }
-        
-        // 检查是否是 API Key 错误
-        if (errorContent.includes('Invalid API key') || errorContent.includes('API key')) {
-          errorContent = '🔑 API 密钥无效\n\n' +
-            '请检查您的 API 密钥是否正确。\n\n' +
-            '💡 解决方案：\n' +
-            '1. 进入"个人中心" → "AI 设置"\n' +
-            '2. 重新输入正确的 API 密钥\n' +
-            '3. 确保密钥没有过期或被撤销';
-        }
-        
-        // 检查是否是网络错误
-        if (errorContent.includes('timeout') || errorContent.includes('network')) {
-          errorContent = '🌐 网络连接超时\n\n' +
-            'AI 服务响应超时，可能是网络问题。\n\n' +
-            '💡 解决方案：\n' +
-            '1. 检查网络连接\n' +
-            '2. 稍后重试\n' +
-            '3. 尝试切换到其他 AI 提供商';
-        }
-        
-        // Show error message
-        const errorMessage: Message = {
-          id: `msg-${Date.now()}`,
-          role: 'assistant',
-          content: errorContent,
-          timestamp: new Date(),
-        };
-        addMessage(activeConversation.id, errorMessage);
-        return;
+    try {
+      // 有 SSH 连接时使用 Agent 模式
+      if (sshSessionId) {
+        await sendMessageAgent(userMessage, context);
+      } else {
+        // 无 SSH 连接时降级为单步解析模式
+        await sendMessageSingleStep(userMessage, context);
       }
-
-      // Check if command requires confirmation
-      const requiresConfirmation = parseResult.requiresConfirmation !== false && parseResult.isDangerous;
-
-      // Show AI response with command
-      const aiMessage: Message = {
-        id: `msg-${Date.now()}`,
-        role: 'assistant',
-        content: parseResult.explanation || '我理解了您的请求',
-        timestamp: new Date(),
-        metadata: {
-          command: parseResult.command,
-          isDangerous: parseResult.isDangerous,
-          requiresConfirmation, // ✨ 新增
-          riskLevel: parseResult.riskLevel, // ✨ 新增
-        },
-      };
-
-      console.log('[AI_MESSAGE] Adding AI message with metadata:', {
-        command: aiMessage.metadata?.command,
-        isDangerous: aiMessage.metadata?.isDangerous,
-        requiresConfirmation: aiMessage.metadata?.requiresConfirmation,
-        riskLevel: aiMessage.metadata?.riskLevel,
-        hasMetadata: !!aiMessage.metadata,
-      });
-
-      addMessage(activeConversation.id, aiMessage);
-
-      // ✨ 自动执行低风险命令
-      if (!requiresConfirmation && sshSessionId) {
-        console.log('[AUTO_EXECUTE] Executing safe command automatically:', parseResult.command);
-        
-        // 延迟 500ms 让用户看到 AI 的解释
-        setTimeout(() => {
-          executeCommand(parseResult.command!, aiMessage.id);
-        }, 500);
-      }
-
     } catch (error) {
-      console.error('Error processing message:', error);
-      
+      console.error('处理消息出错:', error);
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: 'assistant',
         content: '处理请求时出错，请稍后重试。',
         timestamp: new Date(),
       };
-      
       if (activeConversation) {
         addMessage(activeConversation.id, errorMessage);
       }
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  /**
+   * Agent 模式：多步自动执行
+   * 使用 AgentExecutor 规划 → 执行 → 评估循环
+   */
+  const sendMessageAgent = async (userMessage: Message, context: CommandContext) => {
+    if (!activeConversation || !sshSessionId) return;
+
+    // 创建 Agent 计划消息（先占位，事件回调中更新）
+    const planMessageId = `msg-plan-${Date.now()}`;
+    const planMessage: Message = {
+      id: planMessageId,
+      role: 'assistant',
+      content: 'AI 正在规划执行步骤...',
+      timestamp: new Date(),
+      type: 'agent_plan',
+      metadata: {
+        isAgentMode: true,
+        agentStatus: 'planning',
+      },
+    };
+    addMessage(activeConversation.id, planMessage);
+
+    // 创建 AgentExecutor 实例
+    const executor = new AgentExecutor({ maxSteps: 10 });
+    agentExecutor.current = executor;
+
+    // 步骤结果累积
+    const stepResults: Array<{ stepId: string; command: string; output: string; success: boolean; exitCode: number }> = [];
+
+    await executor.run(
+      userMessage.content,
+      context,
+      sshSessionId,
+      // 事件回调：更新 UI
+      (event) => {
+        switch (event.type) {
+          case 'plan_created':
+            updateMessage(activeConversation.id, planMessageId, {
+              content: event.plan.thought,
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'executing',
+                agentPlan: {
+                  thought: event.plan.thought,
+                  steps: event.plan.steps.map(s => ({
+                    id: s.id,
+                    command: s.command,
+                    explanation: s.explanation,
+                    riskLevel: s.riskLevel,
+                    requiresConfirmation: s.requiresConfirmation,
+                  })),
+                  completionCriteria: event.plan.completionCriteria,
+                },
+                stepResults: [],
+                currentStepIndex: -1,
+              },
+            });
+            break;
+
+          case 'step_start':
+            updateMessage(activeConversation.id, planMessageId, {
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'executing',
+                agentPlan: planMessage.metadata?.agentPlan,
+                stepResults: [...stepResults],
+                currentStepIndex: event.stepIndex,
+              },
+            });
+            break;
+
+          case 'step_done':
+            stepResults.push({
+              stepId: event.result.stepId,
+              command: event.result.command,
+              output: event.result.output,
+              success: event.result.success,
+              exitCode: event.result.exitCode,
+            });
+            updateMessage(activeConversation.id, planMessageId, {
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'executing',
+                agentPlan: planMessage.metadata?.agentPlan,
+                stepResults: [...stepResults],
+                currentStepIndex: event.stepIndex,
+              },
+            });
+            break;
+
+          case 'step_needs_confirmation':
+            updateMessage(activeConversation.id, planMessageId, {
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'waiting_confirmation',
+                agentPlan: planMessage.metadata?.agentPlan,
+                stepResults: [...stepResults],
+                currentStepIndex: event.stepIndex,
+              },
+            });
+            break;
+
+          case 'agent_done':
+            updateMessage(activeConversation.id, planMessageId, {
+              content: event.summary,
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'completed',
+                agentPlan: {
+                  ...(planMessage.metadata?.agentPlan || { thought: '', steps: [], completionCriteria: '' }),
+                  summary: event.summary,
+                },
+                stepResults: [...stepResults],
+              },
+            });
+            // 记录到命令历史
+            for (const r of stepResults) {
+              commandHistoryStore.addEntry({
+                id: `hist-${Date.now()}-${r.stepId}`,
+                timestamp: new Date(),
+                deviceId: currentDevice!.id,
+                deviceName: currentDevice!.name,
+                userInput: userMessage.content,
+                parsedCommand: r.command,
+                output: r.output,
+                exitCode: r.exitCode,
+                executionTime: 0,
+                isDangerous: false,
+              }).catch(() => {});
+            }
+            break;
+
+          case 'agent_error':
+            // 添加错误消息
+            const errMsg: Message = {
+              id: `msg-${Date.now()}`,
+              role: 'assistant',
+              content: `执行出错: ${event.error}`,
+              timestamp: new Date(),
+            };
+            addMessage(activeConversation.id, errMsg);
+            // 更新计划状态
+            updateMessage(activeConversation.id, planMessageId, {
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'aborted',
+                agentPlan: planMessage.metadata?.agentPlan,
+                stepResults: [...stepResults],
+              },
+            });
+            break;
+
+          case 'max_steps_reached':
+            updateMessage(activeConversation.id, planMessageId, {
+              content: `已达到最大执行步数 (${event.stepsExecuted})`,
+              metadata: {
+                isAgentMode: true,
+                agentStatus: 'completed',
+                agentPlan: {
+                  ...(planMessage.metadata?.agentPlan || { thought: '', steps: [], completionCriteria: '' }),
+                  summary: `已执行 ${event.stepsExecuted} 步，达到上限`,
+                },
+                stepResults: [...stepResults],
+              },
+            });
+            break;
+        }
+      },
+      // 高风险命令确认回调
+      async (step) => {
+        return new Promise((resolve) => {
+          Alert.alert(
+            '⚠️ 确认执行高风险命令',
+            `命令: ${step.command}\n说明: ${step.explanation}\n风险级别: ${step.riskLevel}`,
+            [
+              { text: '取消', onPress: () => resolve(false), style: 'cancel' },
+              { text: '确认执行', onPress: () => resolve(true) },
+            ]
+          );
+        });
+      },
+    );
+
+    agentExecutor.current = null;
+  };
+
+  /**
+   * 单步模式（无 SSH 连接时的降级方案）
+   * 只解析命令并展示，不执行
+   */
+  const sendMessageSingleStep = async (userMessage: Message, context: CommandContext) => {
+    if (!activeConversation) return;
+
+    const parseResult: ParseResult = await nlController.parseNaturalLanguage(
+      userMessage.content,
+      context
+    );
+
+    if (!parseResult.success || !parseResult.command) {
+      let errorContent = parseResult.error || '抱歉，我无法理解您的请求。请尝试重新描述。';
+
+      if (errorContent.includes('Quota exceeded') || errorContent.includes('quota')) {
+        const provider = nlController.getCurrentProvider();
+        const providerName = provider === 'siliconflow' ? '硅基流动' :
+                            provider === 'gemini' ? 'Gemini' :
+                            provider === 'openai' ? 'OpenAI' : 'Claude';
+        errorContent = `😔 API 配额已用完\n\n您的 ${providerName} API 配额已达到限制。\n\n💡 解决方案：\n1. 等待配额重置\n2. 切换到其他 AI 提供商（推荐：硅基流动）\n3. 升级到付费版\n\n👉 进入"个人中心" → "AI 设置"可以切换 AI 提供商`;
+      }
+      if (errorContent.includes('Invalid API key') || errorContent.includes('API key')) {
+        errorContent = '🔑 API 密钥无效\n\n请检查您的 API 密钥是否正确。\n\n💡 解决方案：\n1. 进入"个人中心" → "AI 设置"\n2. 重新输入正确的 API 密钥\n3. 确保密钥没有过期或被撤销';
+      }
+      if (errorContent.includes('timeout') || errorContent.includes('network')) {
+        errorContent = '🌐 网络连接超时\n\nAI 服务响应超时，可能是网络问题。\n\n💡 解决方案：\n1. 检查网络连接\n2. 稍后重试\n3. 尝试切换到其他 AI 提供商';
+      }
+
+      const errorMessage: Message = {
+        id: `msg-${Date.now()}`,
+        role: 'assistant',
+        content: errorContent,
+        timestamp: new Date(),
+      };
+      addMessage(activeConversation.id, errorMessage);
+      return;
+    }
+
+    // 展示解析结果（不执行）
+    const requiresConfirmation = parseResult.requiresConfirmation !== false && parseResult.isDangerous;
+    const aiMessage: Message = {
+      id: `msg-${Date.now()}`,
+      role: 'assistant',
+      content: parseResult.explanation || '我理解了您的请求',
+      timestamp: new Date(),
+      metadata: {
+        command: parseResult.command,
+        isDangerous: parseResult.isDangerous,
+        requiresConfirmation,
+        riskLevel: parseResult.riskLevel,
+      },
+    };
+    addMessage(activeConversation.id, aiMessage);
+
+    // 有 SSH 连接时自动执行低风险命令
+    if (!requiresConfirmation && sshSessionId) {
+      setTimeout(() => {
+        executeCommand(parseResult.command!, aiMessage.id);
+      }, 500);
     }
   };
 
@@ -711,84 +871,46 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
    */
   const executeCommand = async (command: string, messageId: string) => {
     if (!currentDevice || !activeConversation) return;
-    
+
     if (!sshSessionId) {
       Alert.alert('错误', 'SSH 连接已断开，请重新连接');
       return;
     }
 
     const startTime = Date.now();
-    let commandOutput = '';
-    let exitCode = 0;
 
     try {
-      // Update message to show execution in progress
+      // 更新消息状态为执行中
       updateMessage(activeConversation.id, messageId, {
         metadata: { command, isConfirmed: true },
       });
 
-      // Create a promise to capture command output
-      const outputPromise = new Promise<string>((resolve) => {
-        let buffer = '';
-        let timeoutId: NodeJS.Timeout;
-        let isActive = true;
-        
-        const outputCallback = (data: string) => {
-          if (!isActive) return;
-          buffer += data;
-          
-          // Reset timeout on each data chunk
-          clearTimeout(timeoutId);
-          
-          // Wait 500ms after last output to consider command complete
-          timeoutId = setTimeout(() => {
-            if (isActive) {
-              isActive = false;
-              resolve(buffer);
-            }
-          }, 500);
-        };
-
-        // Register callback
-        sshService.onData(sshSessionId, outputCallback);
-        
-        // Fallback timeout (10 seconds max)
-        setTimeout(() => {
-          if (isActive) {
-            isActive = false;
-            resolve(buffer || '(命令执行超时或无输出)');
-          }
-        }, 10000);
-      });
-
-      // Execute command via SSH
-      await sshService.write(sshSessionId, command + '\n');
-      
-      // Wait for command output
-      commandOutput = await outputPromise;
-
+      // 使用标记法可靠捕获命令输出（替代旧的 500ms 超时方案）
+      const { output: commandOutput, timedOut } = await sshService.writeAndWait(sshSessionId, command);
       const executionTime = Date.now() - startTime;
 
-      // Format and clean output
+      // 格式化并清理输出
       const formattedOutput = formatCommandOutput(commandOutput, command);
-      
-      // Truncate if too long
-      const finalOutput = isOutputTooLong(formattedOutput) 
+
+      // 输出过长时截断
+      const finalOutput = isOutputTooLong(formattedOutput)
         ? truncateOutput(formattedOutput, 100)
         : formattedOutput;
 
-      // Show command output in chat
+      // 在聊天中显示命令输出
       const resultMessage: Message = {
         id: `msg-${Date.now()}`,
         role: 'assistant',
-        content: finalOutput || '命令已执行完成（无输出）',
+        content: timedOut
+          ? (finalOutput || '命令执行超时') + '\n\n⚠️ 命令未在规定时间内完成，输出可能不完整'
+          : finalOutput || '命令已执行完成（无输出）',
         timestamp: new Date(),
         type: 'command',
       };
 
       addMessage(activeConversation.id, resultMessage);
 
-      // Record in history with captured output
+      // 记录到命令历史
       await commandHistoryStore.addEntry({
         id: `hist-${Date.now()}`,
         timestamp: new Date(),
@@ -796,28 +918,28 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
         deviceName: currentDevice.name,
         userInput: messages.find(m => m.metadata?.command === command)?.content || '',
         parsedCommand: command,
-        output: commandOutput || '(命令已执行，输出已显示在终端中)',
-        exitCode: exitCode,
+        output: commandOutput || '(命令已执行，无输出)',
+        exitCode: timedOut ? -1 : 0,
         executionTime: executionTime,
         isDangerous: false,
       });
     } catch (error) {
-      console.error('Error executing command:', error);
-      
+      console.error('执行命令出错:', error);
+
       const executionTime = Date.now() - startTime;
-      
+
       const errorMessage: Message = {
         id: `msg-${Date.now()}`,
         role: 'assistant',
         content: `执行命令时出错: ${error instanceof Error ? error.message : '未知错误'}`,
         timestamp: new Date(),
       };
-      
+
       if (activeConversation) {
         addMessage(activeConversation.id, errorMessage);
       }
 
-      // Record failed execution in history
+      // 记录失败的执行到历史
       await commandHistoryStore.addEntry({
         id: `hist-${Date.now()}`,
         timestamp: new Date(),
@@ -944,6 +1066,12 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
             });
           }
         }}
+        onAgentStop={(msgId) => {
+          console.log('Agent stop requested:', msgId);
+          if (agentExecutor.current) {
+            agentExecutor.current.abort();
+          }
+        }}
       />
     );
   };
@@ -973,23 +1101,21 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
           showBack
           onBack={() => navigation.goBack()}
         />
-        <View style={styles.emptyContainer}>
-          <Icon name="devices" size={64} color={themeColors.textMuted} />
-          <Text style={[styles.emptyText, { color: themeColors.textPrimary }]}>
-            暂无设备
-          </Text>
-          <Text style={[styles.emptyHint, { color: themeColors.textSecondary }]}>
-            请先添加设备才能使用 AI 助手
-          </Text>
-          <TouchableOpacity
-            style={[styles.addDeviceButtonLarge, { backgroundColor: colors.primary }, shadows.md]}
-            onPress={() => navigation.navigate('QRScanner')}
-            activeOpacity={0.8}
-          >
-            <Icon name="add" size={24} color="#FFFFFF" />
-            <Text style={styles.addDeviceButtonText}>添加设备</Text>
-          </TouchableOpacity>
-        </View>
+        <EmptyState
+          icon="devices"
+          title="暂无设备"
+          description="请先添加设备才能使用 AI 助手"
+          action={
+            <TouchableOpacity
+              style={[styles.addDeviceButtonLarge, { backgroundColor: colors.primary }, shadows.md]}
+              onPress={() => navigation.navigate('QRScanner')}
+              activeOpacity={0.8}
+            >
+              <Icon name="add" size={24} color="#FFFFFF" />
+              <Text style={styles.addDeviceButtonText}>添加设备</Text>
+            </TouchableOpacity>
+          }
+        />
       </SafeAreaView>
     );
   }
@@ -1010,89 +1136,17 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
             onBack={() => navigation.goBack()}
           />
 
-          {/* Password Card */}
-          <View style={styles.passwordContainer}>
-            <View style={[styles.passwordCard, { backgroundColor: themeColors.surface }, shadows.lg]}>
-              <Icon name="smart-toy" size={48} color={colors.primary} style={styles.lockIcon} />
-              
-              <Text style={[styles.passwordTitle, { color: themeColors.textPrimary }]}>
-                连接到设备
-              </Text>
-              <Text style={[styles.passwordSubtitle, { color: themeColors.textSecondary }]}>
-                需要 SSH 连接才能执行 AI 生成的命令
-              </Text>
-              
-              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-                <Icon name="person-outline" size={20} color={themeColors.textSecondary} />
-                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                  用户名: a0000
-                </Text>
-              </View>
-              
-              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-                <Icon name="computer" size={20} color={themeColors.textSecondary} />
-                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                  主机: {currentDevice.meshIP}
-                </Text>
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Icon name="vpn-key" size={20} color={themeColors.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.passwordInput, { 
-                    backgroundColor: themeColors.background,
-                    color: themeColors.textPrimary,
-                    borderColor: themeColors.border,
-                  }]}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="请输入密码"
-                  placeholderTextColor={themeColors.textMuted}
-                  secureTextEntry
-                  autoFocus
-                  onSubmitEditing={handleConnect}
-                  editable={!connecting}
-                />
-              </View>
-              
-              {connecting && (
-                <View style={styles.connectingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.connectingText, { color: themeColors.textSecondary }]}>
-                    正在连接...
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.passwordButtons}>
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton, { backgroundColor: themeColors.surfaceDarker }]}
-                  onPress={() => navigation.goBack()}
-                  disabled={connecting}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>
-                    取消
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    styles.connectButton,
-                    { backgroundColor: (!password.trim() || connecting) ? themeColors.textMuted : colors.primary },
-                    shadows.sm,
-                  ]}
-                  onPress={handleConnect}
-                  disabled={!password.trim() || connecting}
-                  activeOpacity={0.8}
-                >
-                  <Icon name="login" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                  <Text style={styles.connectButtonText}>连接</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
+          <SSHPasswordCard
+            icon="smart-toy"
+            title="连接到设备"
+            subtitle="需要 SSH 连接才能执行 AI 生成的命令"
+            meshIP={currentDevice.meshIP}
+            password={password}
+            onPasswordChange={setPassword}
+            onConnect={handleConnect}
+            onCancel={() => navigation.goBack()}
+            connecting={connecting}
+          />
         </KeyboardAvoidingView>
       </SafeAreaView>
     );
@@ -1123,7 +1177,8 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
       <KeyboardAvoidingView
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        // 再稍微减小偏移量，让输入区更贴近键盘
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       >
         {/* Header */}
         <Header
@@ -1145,15 +1200,11 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
           keyExtractor={item => item.id}
           contentContainerStyle={styles.messageList}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Icon name="smart-toy" size={64} color={themeColors.textMuted} />
-              <Text style={[styles.emptyText, { color: themeColors.textPrimary }]}>
-                👋 你好！我是 AI 助手
-              </Text>
-              <Text style={[styles.emptyHint, { color: themeColors.textSecondary }]}>
-                用自然语言告诉我你想做什么，我会帮你生成命令
-              </Text>
-            </View>
+            <EmptyState
+              icon="smart-toy"
+              title="👋 你好！我是 AI 助手"
+              description="用自然语言告诉我你想做什么，我会帮你生成命令"
+            />
           }
         />
 
@@ -1370,359 +1421,5 @@ export const AIChatScreen: React.FC<AIChatScreenProps> = ({ navigation, route })
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  messageList: {
-    padding: spacing.lg,
-    paddingBottom: layout.bottomNavHeight + spacing.xl, // 为底部导航栏留出空间
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing['5xl'],
-    paddingHorizontal: spacing.xl,
-  },
-  emptyText: {
-    fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  emptyHint: {
-    fontSize: typography.fontSize.base,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  addDeviceButtonLarge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  addDeviceButtonText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  processingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-  },
-  processingText: {
-    marginLeft: spacing.sm,
-    fontSize: typography.fontSize.sm,
-  },
-  suggestionsContainer: {
-    borderTopWidth: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-  },
-  suggestionItem: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginHorizontal: spacing.xs,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    minWidth: 120,
-  },
-  suggestionCommand: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginBottom: 2,
-    fontWeight: typography.fontWeight.medium,
-  },
-  suggestionDescription: {
-    fontSize: typography.fontSize.xs,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderTopWidth: 1,
-    gap: spacing.sm,
-    marginBottom: layout.bottomNavHeight, // 为底部导航栏留出空间
-  },
-  inputRow: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 100,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.xl,
-    fontSize: typography.fontSize.base,
-    borderWidth: 1,
-  },
-  attachButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendIconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceButtonLarge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Modal Styles
-  modalOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-    zIndex: 1000,
-  },
-  modalBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-  },
-  modalContent: {
-    borderTopLeftRadius: borderRadius.xl,
-    borderTopRightRadius: borderRadius.xl,
-    maxHeight: '80%',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-  },
-  modalTitle: {
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  },
-  modalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deviceList: {
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  deviceItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-  },
-  deviceItemOffline: {
-    opacity: 0.6,
-  },
-  deviceIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deviceInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  deviceNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  deviceName: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.bold,
-    flex: 1,
-  },
-  offlineBadge: {
-    backgroundColor: colors.status.error + '33',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  offlineBadgeText: {
-    fontSize: 10,
-    color: colors.status.error,
-    fontWeight: typography.fontWeight.medium,
-  },
-  deviceIp: {
-    fontSize: typography.fontSize.xs,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    marginTop: 2,
-  },
-  modalFooter: {
-    padding: spacing.md,
-    borderTopWidth: 1,
-  },
-  addDeviceButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    gap: spacing.sm,
-  },
-  addDeviceText: {
-    fontSize: typography.fontSize.sm,
-    fontWeight: typography.fontWeight.medium,
-  },
-
-  // Password screen styles
-  passwordContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  passwordCard: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-  },
-  lockIcon: {
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-  },
-  passwordTitle: {
-    fontSize: typography.fontSize['2xl'],
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  passwordSubtitle: {
-    fontSize: typography.fontSize.base,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  infoText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: 'monospace',
-  },
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: spacing.md,
-    zIndex: 1,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: spacing.xl + spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    fontSize: typography.fontSize.base,
-    borderWidth: 1,
-  },
-  connectingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  connectingText: {
-    fontSize: typography.fontSize.sm,
-  },
-  
-  // Loading screen styles
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
-  },
-  loadingText: {
-    marginTop: spacing.lg,
-    fontSize: typography.fontSize.base,
-  },
-  passwordButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  button: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  cancelButton: {
-    // backgroundColor set dynamically
-  },
-  connectButton: {
-    // backgroundColor set dynamically
-  },
-  buttonIcon: {
-    // No additional styles needed
-  },
-  buttonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-});
 
 export default AIChatScreen;

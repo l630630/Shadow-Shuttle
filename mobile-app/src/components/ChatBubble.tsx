@@ -15,21 +15,25 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Message } from '../types/nlc';
-import { colors, typography, spacing, borderRadius, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 
 interface ChatBubbleProps {
   message: Message;
   onExecuteCommand?: (command: string, messageId: string) => void;
   onCancelCommand?: (messageId: string) => void;
+  onAgentStop?: (messageId: string) => void;
 }
 
 export const ChatBubble: React.FC<ChatBubbleProps> = ({
   message,
   onExecuteCommand,
   onCancelCommand,
+  onAgentStop,
 }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
+  const colorScheme = useColorScheme();
+  const isDarkMode = colorScheme === 'dark';
   const isUser = message.role === 'user';
   const hasCommand = message.metadata?.command;
   const isDangerous = message.metadata?.isDangerous;
@@ -123,6 +127,146 @@ export const ChatBubble: React.FC<ChatBubbleProps> = ({
               <Text style={styles.confirmButtonText}>确认执行</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </View>
+    );
+  }
+
+  // Agent Plan Type
+  if (message.type === 'agent_plan') {
+    const plan = message.metadata?.agentPlan;
+    const stepResults = message.metadata?.stepResults || [];
+    const currentIndex = message.metadata?.currentStepIndex ?? -1;
+    const status = message.metadata?.agentStatus || 'planning';
+    const totalSteps = plan?.steps?.length || 0;
+    const completedSteps = stepResults.length;
+
+    const statusLabel: Record<string, string> = {
+      planning: '规划中',
+      executing: '执行中',
+      waiting_confirmation: '等待确认',
+      completed: '已完成',
+      aborted: '已中止',
+    };
+
+    const riskColor: Record<string, string> = {
+      low: colors.status.success,
+      medium: colors.status.warning,
+      high: '#FF6B35',
+      critical: colors.status.error,
+    };
+
+    return (
+      <View style={styles.agentPlanContainer}>
+        <View style={[styles.agentPlanCard, { backgroundColor: themeColors.surfaceDarker, borderColor: themeColors.border }]}>
+          {/* 标题栏 */}
+          <View style={[styles.agentPlanHeader, { borderBottomColor: themeColors.border }]}>
+            <View style={styles.agentPlanHeaderLeft}>
+              <Icon name="auto-awesome" size={18} color={colors.primary} />
+              <Text style={[styles.agentPlanTitle, { color: themeColors.textPrimary }]}>
+                AI 执行计划
+              </Text>
+              {totalSteps > 0 && (
+                <Text style={[styles.agentPlanProgress, { color: themeColors.textMuted }]}>
+                  ({completedSteps}/{totalSteps})
+                </Text>
+              )}
+            </View>
+            <View style={styles.agentPlanHeaderRight}>
+              <View style={[styles.statusBadge, { backgroundColor: status === 'executing' ? colors.primary + '20' : themeColors.surface }]}>
+                <Text style={[styles.statusText, { color: status === 'executing' ? colors.primary : themeColors.textMuted }]}>
+                  {statusLabel[status] || status}
+                </Text>
+              </View>
+              {status === 'executing' && onAgentStop && (
+                <TouchableOpacity
+                  style={styles.agentStopButton}
+                  onPress={() => onAgentStop(message.id)}
+                >
+                  <Icon name="stop-circle" size={20} color={colors.status.error} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* AI 思考过程 */}
+          {plan?.thought && (
+            <View style={styles.agentThought}>
+              <Text style={[styles.agentThoughtText, { color: themeColors.textSecondary }]}>
+                {plan.thought}
+              </Text>
+            </View>
+          )}
+
+          {/* 步骤列表 */}
+          {plan?.steps?.map((step, idx) => {
+            const result = stepResults.find(r => r.stepId === step.id);
+            const isDone = !!result;
+            const isActive = idx === currentIndex && !isDone;
+            const isPending = !isDone && !isActive;
+            const stepFailed = result && !result.success;
+
+            return (
+              <View key={step.id} style={[styles.agentStep, { borderBottomColor: themeColors.border }]}>
+                {/* 步骤头部 */}
+                <View style={styles.agentStepHeader}>
+                  <View style={styles.agentStepIndicator}>
+                    {isDone && !stepFailed && (
+                      <Icon name="check-circle" size={18} color={colors.status.success} />
+                    )}
+                    {isDone && stepFailed && (
+                      <Icon name="cancel" size={18} color={colors.status.error} />
+                    )}
+                    {isActive && (
+                      <View style={styles.agentStepSpinner}>
+                        <Icon name="autorenew" size={18} color={colors.primary} />
+                      </View>
+                    )}
+                    {isPending && (
+                      <Icon name="radio-button-unchecked" size={18} color={themeColors.textMuted} />
+                    )}
+                  </View>
+                  <View style={styles.agentStepInfo}>
+                    <Text style={[
+                      styles.agentStepExplanation,
+                      { color: isPending ? themeColors.textMuted : themeColors.textPrimary }
+                    ]}>
+                      {step.explanation}
+                    </Text>
+                    <View style={styles.agentStepMeta}>
+                      <Text style={[styles.agentStepCommand, { color: themeColors.textMuted }]}>
+                        $ {step.command}
+                      </Text>
+                      <View style={[styles.riskBadge, { backgroundColor: riskColor[step.riskLevel] + '20' }]}>
+                        <Text style={[styles.riskBadgeText, { color: riskColor[step.riskLevel] }]}>
+                          {step.riskLevel}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 步骤输出 */}
+                {isDone && result && result.output && (
+                  <View style={[styles.agentStepOutput, { backgroundColor: isDarkMode ? '#0d1117' : '#F5F5F5' }]}>
+                    <Text style={[styles.agentStepOutputText, { color: stepFailed ? colors.status.error : themeColors.textSecondary }]} numberOfLines={6}>
+                      {result.output}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+
+          {/* 完成摘要 */}
+          {plan?.summary && status === 'completed' && (
+            <View style={[styles.agentSummary, { borderTopColor: themeColors.border }]}>
+              <Icon name="task-alt" size={18} color={colors.status.success} />
+              <Text style={[styles.agentSummaryText, { color: themeColors.textPrimary }]}>
+                {plan.summary}
+              </Text>
+            </View>
+          )}
         </View>
       </View>
     );
@@ -486,6 +630,133 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: typography.fontSize.sm,
     fontWeight: typography.fontWeight.bold,
+  },
+
+  // Agent Plan
+  agentPlanContainer: {
+    paddingLeft: 44,
+    paddingRight: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  agentPlanCard: {
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  agentPlanHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+  },
+  agentPlanHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  agentPlanTitle: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.bold,
+  },
+  agentPlanProgress: {
+    fontSize: typography.fontSize.xs,
+  },
+  agentPlanHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  statusText: {
+    fontSize: typography.fontSize.xs,
+    fontWeight: typography.fontWeight.medium,
+  },
+  agentStopButton: {
+    padding: 2,
+  },
+  agentThought: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  agentThoughtText: {
+    fontSize: typography.fontSize.sm,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  agentStep: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 0.5,
+  },
+  agentStepHeader: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  agentStepIndicator: {
+    width: 22,
+    alignItems: 'center',
+    paddingTop: 2,
+  },
+  agentStepSpinner: {
+    // 可加旋转动画
+  },
+  agentStepInfo: {
+    flex: 1,
+  },
+  agentStepExplanation: {
+    fontSize: typography.fontSize.sm,
+    fontWeight: typography.fontWeight.medium,
+    marginBottom: 2,
+  },
+  agentStepMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  agentStepCommand: {
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.mono,
+    flex: 1,
+  },
+  riskBadge: {
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  riskBadgeText: {
+    fontSize: 10,
+    fontWeight: typography.fontWeight.bold,
+    textTransform: 'uppercase',
+  },
+  agentStepOutput: {
+    marginTop: spacing.xs,
+    marginLeft: 30,
+    padding: spacing.sm,
+    borderRadius: borderRadius.sm,
+  },
+  agentStepOutputText: {
+    fontSize: typography.fontSize.xs,
+    fontFamily: typography.fontFamily.mono,
+    lineHeight: 18,
+  },
+  agentSummary: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+  },
+  agentSummaryText: {
+    fontSize: typography.fontSize.sm,
+    flex: 1,
+    lineHeight: 20,
   },
 });
 

@@ -14,7 +14,8 @@ import {
   useColorScheme,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { colors, typography, spacing, borderRadius, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 import { Logo } from './Logo';
 
 interface HeaderProps {
@@ -45,8 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
   onProfile,
   rightAction,
 }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
 
   return (
     <View style={[

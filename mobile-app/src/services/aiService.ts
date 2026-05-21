@@ -94,7 +94,7 @@ export abstract class BaseAIService implements AIService {
    * @returns The system prompt / 系统提示
    */
   protected buildSystemPrompt(context: CommandContext): string {
-    const { deviceInfo, currentDirectory } = context;
+    const { deviceInfo, currentDirectory, remoteContext } = context;
     const isMac = deviceInfo.os === 'macos';
 
     const macGuiRule = isMac
@@ -102,8 +102,19 @@ export abstract class BaseAIService implements AIService {
 macOS GUI apps: To OPEN applications (e.g. 微信 WeChat, QQ, Safari, Chrome, 钉钉), use: open -a "AppName". Examples: open -a "WeChat", open -a "微信", open -a "QQ", open -a "Safari". Do NOT use wechat, qq, safari as shell commands (they do not exist on macOS).`
       : '';
 
+    // 远程机器实时上下文（如果有）
+    const remoteContextBlock = remoteContext
+      ? `
+Remote machine state (实时状态):
+- Current directory: ${remoteContext.pwd}
+- User: ${remoteContext.whoami}
+- Hostname: ${remoteContext.hostname}
+- OS: ${remoteContext.uname}
+- Disk: ${remoteContext.dfSummary.split('\n').slice(0, 3).join('; ')}`
+      : '';
+
     return `You are a shell command assistant for ${deviceInfo.os} (${deviceInfo.shell}).
-Current directory: ${currentDirectory}
+Current directory: ${currentDirectory}${remoteContextBlock}
 
 CRITICAL: You MUST respond with ONLY a JSON object. No other text.
 

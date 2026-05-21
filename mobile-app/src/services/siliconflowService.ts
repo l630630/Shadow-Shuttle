@@ -77,7 +77,7 @@ export class SiliconFlowService extends BaseAIService {
   constructor(
     apiKey: string, 
     timeout: number = 10000,
-    model: string = 'Qwen/Qwen3-VL-32B-Instruct'
+    model: string = 'Qwen/Qwen2.5-7B-Instruct'  // 修正为正确的模型名称
   ) {
     super(apiKey, timeout);
     
