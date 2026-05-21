@@ -226,7 +226,8 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
       const shadowdService = getShadowdService();
       
       const defaultHosts = hosts || [
-        '192.168.2.57',  // Mac 的真实 IP（从配对码获取）
+        '172.20.10.3',   // Mac 的当前 IP（iPhone 热点）
+        '192.168.2.57',  // Mac 的备用 IP（WiFi）
         '10.0.2.2',      // Android 模拟器访问宿主机
         'localhost',
         '127.0.0.1',
@@ -279,11 +280,11 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
         id: mockDeviceId,
         name: '630MacBook-Air.local',
         hostname: '630MacBook-Air.local',
-        meshIP: '192.168.2.57', // 使用真实的 Mac IP
+        meshIP: '172.20.10.3', // 使用当前的 Mac IP（iPhone 热点）
         sshPort: 8022, // WebSocket SSH 代理端口
         grpcPort: 50052,
         publicKey: 'mock_public_key',
-        online: true,
+        online: true, // 默认在线 - SSH 连接不依赖 HTTP API
         lastSeen: new Date(),
       };
       

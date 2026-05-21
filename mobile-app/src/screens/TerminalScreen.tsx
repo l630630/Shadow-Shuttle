@@ -13,8 +13,6 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
-  useColorScheme,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -23,7 +21,9 @@ import { Device } from '../types/device';
 import { getSSHService, SSHConnectionConfig } from '../services/sshService';
 import { getANSIParser, ANSISegment } from '../utils/ansiParser';
 import { Header } from '../components/Header';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { spacing } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
+import { SSHPasswordCard } from '../components/SSHPasswordCard';
 
 interface TerminalScreenProps {
   route: {
@@ -39,8 +39,7 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
   navigation,
 }) => {
   const { device } = route.params;
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [output, setOutput] = useState<string>('');
   const [input, setInput] = useState<string>('');
@@ -48,8 +47,14 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
   const [needsPassword, setNeedsPassword] = useState(true);
   const [password, setPassword] = useState<string>('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const inputRef = useRef<TextInput>(null);
   const sshService = getSSHService();
   const ansiParser = getANSIParser();
+  
+  // 性能优化：限制输出长度，避免渲染过多内容
+  const MAX_OUTPUT_LENGTH = 50000; // 最大 50KB 输出
+  const [isScrolling, setIsScrolling] = useState(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   useEffect(() => {
     // Don't auto-connect, wait for password input
@@ -121,10 +126,23 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
       
       // Register callbacks BEFORE clearing output
       sshService.onData(newSessionId, (data) => {
-        setOutput(prev => prev + data);
-        // Auto-scroll to bottom
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
+        setOutput(prev => {
+          const newOutput = prev + data;
+          // 限制输出长度，保留最后的内容
+          if (newOutput.length > MAX_OUTPUT_LENGTH) {
+            return newOutput.slice(-MAX_OUTPUT_LENGTH);
+          }
+          return newOutput;
+        });
+        
+        // 防抖滚动：避免频繁滚动影响性能
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => {
+          if (!isScrolling) {
+            scrollViewRef.current?.scrollToEnd({ animated: false });
+          }
         }, 100);
       });
       
@@ -143,6 +161,11 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
       
       // Clear connecting message after callbacks are registered
       setOutput('');
+      
+      // Auto-focus input after connection
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 500);
       
       // Auto-configure terminal for better display
       setTimeout(() => {
@@ -202,45 +225,64 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
     );
   };
   
-  // Render colored terminal output
-  const renderColoredOutput = () => {
+  // Render colored terminal output with memoization
+  const renderColoredOutput = React.useMemo(() => {
     const segments = ansiParser.parse(output);
     
-    return segments.map((segment: ANSISegment, index: number) => {
-      const style: any = {
-        fontFamily: 'monospace',
-        fontSize: 14,
-        lineHeight: 20,
-      };
-      
-      if (segment.color) {
-        style.color = segment.color;
-      } else {
-        style.color = '#00FF00'; // Default green
-      }
-      
-      if (segment.backgroundColor) {
-        style.backgroundColor = segment.backgroundColor;
-      }
-      
-      if (segment.bold) {
-        style.fontWeight = 'bold';
-      }
-      
-      if (segment.italic) {
-        style.fontStyle = 'italic';
-      }
-      
-      if (segment.underline) {
-        style.textDecorationLine = 'underline';
-      }
-      
-      return (
-        <Text key={index} style={style}>
-          {segment.text}
-        </Text>
-      );
-    });
+    return (
+      <>
+        {segments.map((segment: ANSISegment, index: number) => {
+          const style: any = {
+            fontFamily: 'monospace',
+            fontSize: 14,
+            lineHeight: 20,
+          };
+          
+          if (segment.color) {
+            style.color = segment.color;
+          } else {
+            style.color = '#00FF00'; // Default green
+          }
+          
+          if (segment.backgroundColor) {
+            style.backgroundColor = segment.backgroundColor;
+          }
+          
+          if (segment.bold) {
+            style.fontWeight = 'bold';
+          }
+          
+          if (segment.italic) {
+            style.fontStyle = 'italic';
+          }
+          
+          if (segment.underline) {
+            style.textDecorationLine = 'underline';
+          }
+          
+          return (
+            <Text key={index} style={style}>
+              {segment.text}
+            </Text>
+          );
+        })}
+      </>
+    );
+  }, [output]); // 只在 output 变化时重新解析
+  
+  // Handle scroll events to detect user scrolling
+  const handleScroll = () => {
+    setIsScrolling(true);
+    
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+    
+    // Reset scrolling state after user stops scrolling
+    scrollTimeoutRef.current = setTimeout(() => {
+      setIsScrolling(false);
+    }, 1000);
   };
   
   return (
@@ -250,93 +292,22 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.keyboardAvoidingView}
-          keyboardVerticalOffset={0}
+          // 增大偏移量，确保密码输入框始终在键盘上方可见
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
         >
-          <View style={styles.passwordContainer}>
-            <View style={[styles.passwordCard, { backgroundColor: themeColors.surface }, shadows.lg]}>
-              <Icon name="lock-outline" size={48} color={colors.primary} style={styles.lockIcon} />
-              
-              <Text style={[styles.passwordTitle, { color: themeColors.textPrimary }]}>
-                SSH 连接
-              </Text>
-              <Text style={[styles.passwordSubtitle, { color: themeColors.textSecondary }]}>
-                连接到 {device.name}
-              </Text>
-              
-              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-                <Icon name="person-outline" size={20} color={themeColors.textSecondary} />
-                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                  用户名: a0000
-                </Text>
-              </View>
-              
-              <View style={[styles.infoRow, { backgroundColor: themeColors.surfaceDarker }]}>
-                <Icon name="computer" size={20} color={themeColors.textSecondary} />
-                <Text style={[styles.infoText, { color: themeColors.textPrimary }]}>
-                  主机: {device.meshIP}
-                </Text>
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Icon name="vpn-key" size={20} color={themeColors.textMuted} style={styles.inputIcon} />
-                <TextInput
-                  style={[styles.passwordInput, { 
-                    backgroundColor: themeColors.background,
-                    color: themeColors.textPrimary,
-                    borderColor: themeColors.border,
-                  }]}
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="请输入密码"
-                  placeholderTextColor={themeColors.textMuted}
-                  secureTextEntry
-                  autoFocus
-                  onSubmitEditing={handleConnect}
-                  editable={!connecting}
-                />
-              </View>
-              
-              {connecting && (
-                <View style={styles.connectingContainer}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={[styles.connectingText, { color: themeColors.textSecondary }]}>
-                    正在连接...
-                  </Text>
-                </View>
-              )}
-              
-              <View style={styles.passwordButtons}>
-                <TouchableOpacity
-                  style={[styles.button, styles.cancelButton, { backgroundColor: themeColors.surfaceDarker }]}
-                  onPress={() => navigation.goBack()}
-                  disabled={connecting}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.buttonText, { color: themeColors.textPrimary }]}>
-                    取消
-                  </Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity
-                  style={[
-                    styles.button,
-                    styles.connectButton,
-                    { backgroundColor: (!password.trim() || connecting) ? themeColors.textMuted : colors.primary },
-                    shadows.sm,
-                  ]}
-                  onPress={handleConnect}
-                disabled={!password.trim() || connecting}
-                activeOpacity={0.8}
-              >
-                <Icon name="login" size={20} color="#FFFFFF" style={styles.buttonIcon} />
-                <Text style={styles.connectButtonText}>连接</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+          <SSHPasswordCard
+            title="SSH 连接"
+            subtitle={`连接到 ${device.name}`}
+            meshIP={device.meshIP}
+            password={password}
+            onPasswordChange={setPassword}
+            onConnect={handleConnect}
+            onCancel={() => navigation.goBack()}
+            connecting={connecting}
+          />
         </KeyboardAvoidingView>
       ) : (
-        // Terminal screen
+        // Terminal screen - 使用 KeyboardAvoidingView 实现原生流畅动画
         <>
           <Header
             title={device.name}
@@ -349,46 +320,54 @@ export const TerminalScreen: React.FC<TerminalScreenProps> = ({
             }}
           />
           
-          <ScrollView
-            ref={scrollViewRef}
-            style={[styles.terminalOutput, { backgroundColor: themeColors.background }]}
-            contentContainerStyle={styles.terminalContent}
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.terminalContainer}
+            // 增大偏移量，确保终端输入框完全在键盘上方
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
           >
-            <Text style={[styles.terminalText, { color: colors.online }]}>
-              {renderColoredOutput()}
-            </Text>
-          </ScrollView>
-          
-          <View style={[styles.inputContainer, { backgroundColor: themeColors.surfaceDarker, borderTopColor: themeColors.border }]}>
-            <TextInput
-              style={[styles.input, { 
-                backgroundColor: themeColors.background,
-                color: themeColors.textPrimary,
-                borderColor: themeColors.border,
-              }]}
-              value={input}
-              onChangeText={setInput}
-              onSubmitEditing={handleSendCommand}
-              placeholder="输入命令..."
-              placeholderTextColor={themeColors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="send"
-              editable={!connecting && !!sessionId}
-            />
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                { backgroundColor: (!sessionId || !input.trim()) ? themeColors.textMuted : colors.primary },
-                shadows.sm,
-              ]}
-              onPress={handleSendCommand}
-              disabled={!sessionId || !input.trim()}
-              activeOpacity={0.8}
+            <ScrollView
+              ref={scrollViewRef}
+              style={styles.terminalOutput}
+              contentContainerStyle={styles.terminalContent}
+              onScroll={handleScroll}
+              scrollEventThrottle={200}
+              keyboardShouldPersistTaps="handled"
             >
-              <Icon name="send" size={20} color="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
+              <Text style={styles.terminalText}>
+                {renderColoredOutput}
+              </Text>
+            </ScrollView>
+            
+            <View style={styles.inputContainer}>
+              <TextInput
+                ref={inputRef}
+                style={styles.input}
+                value={input}
+                onChangeText={setInput}
+                onSubmitEditing={handleSendCommand}
+                placeholder="$ "
+                placeholderTextColor="#4A5568"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="send"
+                editable={!connecting && !!sessionId}
+                autoFocus={false}
+                blurOnSubmit={false}
+              />
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  { opacity: (!sessionId || !input.trim()) ? 0.3 : 1 },
+                ]}
+                onPress={handleSendCommand}
+                disabled={!sessionId || !input.trim()}
+                activeOpacity={0.7}
+              >
+                <Icon name="send" size={22} color="#00FF00" />
+              </TouchableOpacity>
+            </View>
+          </KeyboardAvoidingView>
         </>
       )}
     </SafeAreaView>
@@ -403,139 +382,50 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  // Password screen styles
-  passwordContainer: {
+  // Terminal container with keyboard avoidance
+  terminalContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.xl,
   },
-  passwordCard: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-  },
-  lockIcon: {
-    alignSelf: 'center',
-    marginBottom: spacing.lg,
-  },
-  passwordTitle: {
-    fontSize: typography.fontSize['2xl'],
-    fontWeight: typography.fontWeight.bold,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  passwordSubtitle: {
-    fontSize: typography.fontSize.base,
-    marginBottom: spacing.xl,
-    textAlign: 'center',
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    marginBottom: spacing.sm,
-  },
-  infoText: {
-    fontSize: typography.fontSize.sm,
-    fontFamily: 'monospace',
-  },
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  inputIcon: {
-    position: 'absolute',
-    left: spacing.md,
-    zIndex: 1,
-  },
-  passwordInput: {
-    flex: 1,
-    paddingHorizontal: spacing.xl + spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    fontSize: typography.fontSize.base,
-    borderWidth: 1,
-  },
-  connectingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  connectingText: {
-    fontSize: typography.fontSize.sm,
-  },
-  passwordButtons: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    marginTop: spacing.lg,
-  },
-  button: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    gap: spacing.xs,
-  },
-  cancelButton: {
-    // backgroundColor set dynamically
-  },
-  connectButton: {
-    // backgroundColor set dynamically
-  },
-  buttonIcon: {
-    // No additional styles needed
-  },
-  buttonText: {
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  connectButtonText: {
-    color: '#FFFFFF',
-    fontSize: typography.fontSize.base,
-    fontWeight: typography.fontWeight.semibold,
-  },
-  // Terminal screen styles
+  // Terminal screen styles - macOS Terminal 风格
   terminalOutput: {
     flex: 1,
+    backgroundColor: '#000000', // 纯黑背景，像 macOS Terminal
   },
   terminalContent: {
     padding: spacing.md,
+    paddingBottom: spacing.sm, // 减少底部内边距
   },
   terminalText: {
-    fontFamily: 'monospace',
-    fontSize: typography.fontSize.sm,
-    lineHeight: 20,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', // iOS 使用 Menlo 字体
+    fontSize: 13, // macOS Terminal 默认字体大小
+    lineHeight: 18,
+    color: '#00FF00', // 经典绿色终端文字
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: spacing.md,
-    borderTopWidth: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs, // 减少垂直内边距
+    backgroundColor: '#000000', // 黑色背景
+    borderTopWidth: 0, // 移除边框，更简洁
     gap: spacing.sm,
   },
   input: {
     flex: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.md,
-    fontSize: typography.fontSize.sm,
-    fontFamily: 'monospace',
-    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs + 2, // 减少内边距
+    fontSize: 13, // 与终端输出一致
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#00FF00', // 绿色文字
+    backgroundColor: '#000000', // 黑色背景
+    borderWidth: 0, // 移除边框
+    height: 36, // 固定高度，减少间距
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.md,
+    width: 36, // 减小按钮尺寸
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'transparent', // 透明背景
   },
 });

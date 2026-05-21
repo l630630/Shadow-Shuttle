@@ -12,10 +12,7 @@
  */
 
 import { AIService } from './aiService';
-import { OpenAIService } from './openAIService';
-import { ClaudeService } from './claudeService';
-import { GeminiService } from './geminiService';
-import { SiliconFlowService } from './siliconflowService';
+import { AIProviderFactory } from './ai/AIProviderFactory';
 import { PrivacyFilter } from './privacyFilter';
 import { SecurityChecker } from './securityChecker';
 import { SSHService, getSSHService } from './sshService';
@@ -26,6 +23,7 @@ import {
   ExecutionResult,
   AIProvider,
   AIRequestOptions,
+  RemoteContext,
 } from '../types/nlc';
 
 /**
@@ -125,16 +123,10 @@ export class NLController implements INLController {
     // Initialize the appropriate AI service
     switch (provider) {
       case 'openai':
-        this.aiService = new OpenAIService(apiKey);
-        break;
       case 'claude':
-        this.aiService = new ClaudeService(apiKey);
-        break;
       case 'gemini':
-        this.aiService = new GeminiService(apiKey);
-        break;
       case 'siliconflow':
-        this.aiService = new SiliconFlowService(apiKey);
+        this.aiService = AIProviderFactory.create(provider, apiKey);
         break;
       default:
         throw new Error(`Unknown AI provider: ${provider}`);
@@ -151,6 +143,14 @@ export class NLController implements INLController {
    */
   getCurrentProvider(): AIProvider | null {
     return this.currentProvider;
+  }
+
+  /**
+   * 获取当前 AI 服务实例（供 AgentExecutor 使用）
+   * 获取当前 AI 服务实例
+   */
+  getAIService(): AIService | null {
+    return this.aiService;
   }
 
   /**
@@ -263,82 +263,162 @@ export class NLController implements INLController {
   }
 
   /**
-   * Execute a command via SSH
-   * 通过 SSH 执行命令
-   * 
-   * Requirements: 1.3, 1.7
-   * 
-   * @param command Command to execute
-   * @param deviceId Target device ID
-   * @param sessionId SSH session ID
-   * @returns Execution result with output and exit code
+   * 通过 SSH 执行命令（使用标记法可靠捕获输出）
+   *
+   * 使用 sshService.writeAndWait() 替代旧的 500ms 超时方案，
+   * 通过在命令后追加唯一标记来准确检测命令是否执行完毕。
+   *
+   * @param command 要执行的命令
+   * @param deviceId 目标设备 ID
+   * @param sessionId SSH 会话 ID
+   * @param onOutput 可选的流式输出回调
+   * @returns 执行结果（包含输出和退出码）
    */
   async executeCommand(
     command: string,
-    deviceId: string,
-    sessionId: string
+    _deviceId: string,
+    sessionId: string,
+    onOutput?: (output: string) => void
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
 
     try {
-      // Validate inputs
+      // 校验输入
       if (!command || command.trim().length === 0) {
         return {
           success: false,
           output: '',
           exitCode: -1,
           executionTime: 0,
-          error: 'Command cannot be empty',
+          error: '命令不能为空',
         };
       }
 
-      // Check if SSH session is connected
+      // 检查 SSH 会话是否已连接
       if (!this.sshService.isConnected(sessionId)) {
         return {
           success: false,
           output: '',
           exitCode: -1,
           executionTime: 0,
-          error: 'SSH session not connected',
+          error: 'SSH 会话未连接',
         };
       }
 
-      // Execute command via SSH (Requirement 1.3)
-      // Note: The actual command execution and output capture will be handled
-      // by the SSH service through callbacks. For now, we'll send the command
-      // and return a placeholder result.
-      
-      await this.sshService.write(sessionId, command + '\n');
+      // 使用标记法执行命令并等待输出完成
+      const { output, timedOut } = await this.sshService.writeAndWait(sessionId, command);
 
-      // In a real implementation, we would wait for the command to complete
-      // and capture the output. For now, we'll return a success result.
-      // The actual output will be streamed through the SSH data callback.
-      
+      // 通知流式输出回调
+      if (onOutput && output) {
+        onOutput(output);
+      }
+
       const executionTime = Date.now() - startTime;
 
-      // Requirement 1.7: Return execution result with exit status
       return {
-        success: true,
-        output: 'Command sent successfully. Output will be displayed in the terminal.',
-        exitCode: 0,
+        success: !timedOut,
+        output: output || (timedOut ? '命令执行超时' : '无输出'),
+        exitCode: timedOut ? -1 : 0,
         executionTime,
       };
     } catch (error) {
       const executionTime = Date.now() - startTime;
 
-      console.error('Error executing command:', error);
+      console.error('执行命令出错:', error);
 
-      // Requirement 1.7: Return error information
       return {
         success: false,
         output: '',
         exitCode: -1,
         executionTime,
-        error: error instanceof Error 
-          ? error.message 
-          : 'Failed to execute command',
+        error: error instanceof Error
+          ? error.message
+          : '执行命令失败',
       };
     }
+  }
+
+  /**
+   * Get device context for AI parsing
+   * 获取设备上下文用于 AI 解析
+   * 
+   * @param deviceId Device ID
+   * @param sessionId SSH session ID
+   * @returns Command context with device information
+   */
+  async getDeviceContext(
+    deviceId: string,
+    sessionId: string
+  ): Promise<Partial<CommandContext>> {
+    const session = this.sshService.getSession(sessionId);
+    
+    if (!session) {
+      return {
+        deviceId,
+        os: 'unknown',
+        shell: 'bash',
+        currentDirectory: '~',
+      };
+    }
+
+    return {
+      deviceId,
+      deviceName: session.device.name,
+      os: this.detectOS(session.device.hostname),
+      shell: 'bash', // TODO: Detect shell type
+      currentDirectory: '~', // TODO: Get current directory from session
+    };
+  }
+
+  /**
+   * Detect OS from hostname
+   * 从主机名检测操作系统
+   */
+  private detectOS(hostname: string): string {
+    const lower = hostname.toLowerCase();
+    
+    if (lower.includes('mac') || lower.includes('darwin')) {
+      return 'macos';
+    }
+    if (lower.includes('win') || lower.includes('windows')) {
+      return 'windows';
+    }
+    if (lower.includes('ubuntu') || lower.includes('debian') || lower.includes('linux')) {
+      return 'linux';
+    }
+    
+    return 'linux'; // 默认 Linux
+  }
+
+  /**
+   * 采集远程机器上下文信息
+   *
+   * 通过执行几条轻量级只读命令，获取远程机器的实时状态，
+   * 用于注入 AI 的 system prompt 以提高命令生成的准确性。
+   *
+   * @param sessionId SSH 会话 ID
+   * @returns 远程机器上下文
+   */
+  async gatherContext(sessionId: string): Promise<RemoteContext> {
+    const runCmd = async (cmd: string, fallback: string = ''): Promise<string> => {
+      try {
+        const { output } = await this.sshService.writeAndWait(sessionId, cmd, 5000);
+        return output.trim() || fallback;
+      } catch {
+        return fallback;
+      }
+    };
+
+    // 并行采集 5 条轻量命令的结果
+    const [pwd, whoami, hostname, uname, dfSummary] = await Promise.all([
+      runCmd('pwd', '~'),
+      runCmd('whoami', 'user'),
+      runCmd('hostname', 'localhost'),
+      runCmd('uname -a', 'unknown'),
+      runCmd('df -h | head -4', 'unknown'),
+    ]);
+
+    return { pwd, whoami, hostname, uname, dfSummary };
   }
 
   /**

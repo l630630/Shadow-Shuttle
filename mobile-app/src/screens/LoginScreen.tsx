@@ -19,7 +19,8 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useAuthStore } from '../stores/authStore';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 import { Logo } from '../components/Logo';
 
 export const LoginScreen: React.FC = () => {
@@ -30,8 +31,7 @@ export const LoginScreen: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   const { login, register, loading } = useAuthStore();
-  const isDarkMode = true;
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
 
   const handleLogin = async () => {
     try {

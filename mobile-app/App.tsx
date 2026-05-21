@@ -18,6 +18,10 @@ import { DeviceListScreen } from './src/screens/DeviceListScreen';
 import { TerminalScreen } from './src/screens/TerminalScreen';
 import { AIChatScreen } from './src/screens/AIChatScreen';
 import { CommandHistoryScreen } from './src/screens/CommandHistoryScreen';
+import { CommandFavoritesScreen } from './src/screens/CommandFavoritesScreen';
+import { AuditLogScreen } from './src/screens/AuditLogScreen';
+import { SettingsScreen } from './src/screens/SettingsScreen';
+import { VPNSettingsScreen } from './src/screens/VPNSettingsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { QRScannerScreen } from './src/screens/QRScannerScreen';
@@ -32,8 +36,10 @@ import { AddDeviceModal } from './src/components/AddDeviceModal';
 import { useAuthStore } from './src/stores/authStore';
 import { useDeviceStore } from './src/stores/deviceStore';
 import { colors, typography, spacing, borderRadius, shadows, layout, getThemeColors } from './src/styles/theme';
+import { registerVPNServices, verifyVPNServices } from './src/services/vpn/registerVPNServices';
+import { registerAllSkills } from './src/services/skills';
 
-type Screen = 'dashboard' | 'devices' | 'terminal' | 'aichat' | 'history' | 'profile' | 'aisettings';
+type Screen = 'dashboard' | 'devices' | 'terminal' | 'aichat' | 'history' | 'favorites' | 'audit' | 'settings' | 'profile' | 'aisettings';
 
 function App(): React.JSX.Element {
   // 强制使用 Dark 模式，与 shadow-shuttle web 版保持一致
@@ -51,10 +57,35 @@ function App(): React.JSX.Element {
   const [homeTerminalConnected, setHomeTerminalConnected] = useState(false);
   const [showAddDeviceModal, setShowAddDeviceModal] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showVPNSettings, setShowVPNSettings] = useState(false);
 
   // Auth state
   const { isLoggedIn, loadAuthState, loading: authLoading } = useAuthStore();
   const { addDevice: addDeviceToStore, loadDevices: loadDevicesFromStore, devices: storedDevices, refreshDeviceStatuses, discoverDevices, deduplicateDevices } = useDeviceStore();
+
+  // Register VPN services and skills on mount
+  useEffect(() => {
+    console.log('🔧 Initializing VPN services...');
+    try {
+      registerVPNServices();
+      const verified = verifyVPNServices();
+      if (verified) {
+        console.log('✅ VPN services initialized successfully');
+      } else {
+        console.warn('⚠️ VPN services verification failed');
+      }
+    } catch (error) {
+      console.error('❌ Failed to initialize VPN services:', error);
+    }
+
+    // Register skills
+    try {
+      registerAllSkills();
+      console.log('✅ Skills registered');
+    } catch (error) {
+      console.error('❌ Failed to register skills:', error);
+    }
+  }, []);
 
   // Load auth state and devices on mount
   useEffect(() => {
@@ -242,6 +273,14 @@ function App(): React.JSX.Element {
         }
       } else if (screen === 'History') {
         handleTabChange('history');
+      } else if (screen === 'Favorites') {
+        setCurrentTab('favorites' as TabId);
+      } else if (screen === 'Audit') {
+        setCurrentTab('audit' as TabId);
+      } else if (screen === 'Settings') {
+        setCurrentTab('settings' as TabId);
+      } else if (screen === 'VPNSettings') {
+        setShowVPNSettings(true);
       }
     },
     goBack: () => {
@@ -259,7 +298,7 @@ function App(): React.JSX.Element {
         hostname: ip,
         meshIP: ip,
         sshPort: parseInt(port),
-        online: false, // 初始状态为离线，需要测试连接
+        online: true, // 局域网手动添加的设备，默认视为在线
         lastSeen: new Date(),
         publicKey: '', // 手动添加的设备暂时没有公钥
       };
@@ -287,6 +326,37 @@ function App(): React.JSX.Element {
 
   // ⚠️ 注意：所有 hooks 已经在上面定义完毕，
   // 从这里开始可以根据状态做条件渲染（早返回），不会再新增 hooks。
+
+  // 全屏 VPN 设置页
+  if (showVPNSettings) {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
+          <TouchableOpacity
+            onPress={() => setShowVPNSettings(false)}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+            activeOpacity={0.7}
+          >
+            <Icon name="arrow-back" size={24} color={themeColors.textPrimary} />
+            <Text
+              style={{
+                color: themeColors.textPrimary,
+                fontSize: typography.fontSize.lg,
+                fontWeight: typography.fontWeight.bold,
+              }}
+            >
+              VPN 设置
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <VPNSettingsScreen />
+      </SafeAreaView>
+    );
+  }
 
   // Show loading screen while checking auth state
   if (authLoading) {
@@ -394,22 +464,9 @@ function App(): React.JSX.Element {
             </Text>
           </View>
 
-          {/* Device List */}
+          {/* Device List for AI when no device selected */}
           <ScrollView style={styles.aiDeviceSelectList} contentContainerStyle={styles.aiDeviceSelectContent}>
-            {!vpnConnected ? (
-              <View style={styles.emptyDevicesCard}>
-                <Icon name="wifi-off" size={48} color={themeColors.textMuted} />
-                <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
-                  请先连接 VPN 以查看设备
-                </Text>
-                <TouchableOpacity
-                  style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-                  onPress={() => handleTabChange('dashboard')}
-                >
-                  <Text style={styles.primaryButtonText}>返回首页连接</Text>
-                </TouchableOpacity>
-              </View>
-            ) : loadingDevices ? (
+            {loadingDevices ? (
               <View style={styles.loadingCard}>
                 <ActivityIndicator size="large" color={colors.primary} />
                 <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>
@@ -487,6 +544,48 @@ function App(): React.JSX.Element {
     );
   }
 
+  // 如果在命令收藏界面
+  if (currentTab === 'favorites') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <CommandFavoritesScreen navigation={navigation} />
+        <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+      </SafeAreaView>
+    );
+  }
+
+  // 如果在审计日志界面
+  if (currentTab === 'audit') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <AuditLogScreen navigation={navigation} />
+        <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+      </SafeAreaView>
+    );
+  }
+
+  // 如果在设置界面
+  if (currentTab === 'settings') {
+    return (
+      <SafeAreaView style={[styles.container, { backgroundColor: themeColors.background }]}>
+        <StatusBar
+          barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+          backgroundColor={themeColors.background}
+        />
+        <SettingsScreen navigation={navigation} />
+        <BottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
+      </SafeAreaView>
+    );
+  }
+
   // 如果在个人中心界面
   if (currentTab === 'profile') {
     return (
@@ -545,42 +644,42 @@ function App(): React.JSX.Element {
           ]}>
             <View style={styles.vpnHeader}>
               <Text style={[styles.vpnTitle, { color: themeColors.textPrimary }]}>
-                VPN 状态
+                VPN 状态（跨网络功能，当前版本仅使用局域网）
               </Text>
               <View style={styles.vpnStatusRow}>
                 <View style={[
                   styles.vpnStatusDot,
-                  { backgroundColor: vpnConnected ? colors.online : colors.offline }
+                  { backgroundColor: colors.warning }
                 ]} />
                 <Text style={[styles.vpnStatusText, { color: themeColors.textPrimary }]}>
-                  {vpnConnected ? '已连接' : '未连接'}
+                  跨网络 VPN 功能开发中，局域网连接已可用
                 </Text>
               </View>
             </View>
 
-            {vpnConnected && (
-              <Text style={[styles.vpnIp, { color: themeColors.textSecondary }]}>
-                Mesh IP: 100.64.0.1
-              </Text>
-            )}
-
             <TouchableOpacity
               style={[
                 styles.vpnButton,
-                { backgroundColor: vpnConnected ? colors.status.error : colors.primary },
+                { backgroundColor: colors.primary },
                 shadows.md,
               ]}
-              onPress={toggleVPN}
+              onPress={() => {
+                Alert.alert(
+                  '提示',
+                  '当前版本只需要在同一局域网内即可连接电脑，VPN 跨网络功能还在开发中。\n\n请确保手机和电脑连接到同一个 Wi‑Fi，然后在下方“添加设备”里填写电脑的局域网 IP 和 SSH 端口即可。',
+                  [{ text: '我知道了' }],
+                );
+              }}
               activeOpacity={0.8}
             >
               <Text style={styles.vpnButtonText}>
-                {vpnConnected ? '断开连接' : '连接 VPN'}
+                如何使用局域网连接电脑
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* Device List */}
+          {/* Device List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: themeColors.textPrimary }]}>
@@ -608,14 +707,7 @@ function App(): React.JSX.Element {
             </View>
           </View>
 
-          {!vpnConnected ? (
-            <View style={styles.emptyDevicesCard}>
-              <Icon name="wifi-off" size={48} color={themeColors.textMuted} />
-              <Text style={[styles.emptyDevicesText, { color: themeColors.textSecondary }]}>
-                请先连接 VPN 以查看设备
-              </Text>
-            </View>
-          ) : loadingDevices ? (
+          {loadingDevices ? (
             <View style={styles.loadingCard}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={[styles.loadingText, { color: themeColors.textSecondary }]}>

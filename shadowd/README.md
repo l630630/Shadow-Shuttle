@@ -1,22 +1,36 @@
 # Shadowd - Shadow Shuttle 守护进程
 
-Shadowd 是 Shadow Shuttle 系统的守护进程组件，运行在用户计算机上。它通过私有 Mesh 网络提供 SSH 访问和设备信息的 gRPC 接口。
+Shadowd 是 Shadow Shuttle 系统的服务端守护进程，运行在用户的服务器或电脑上。它为移动端 AI 助手提供 SSH 访问能力，让你可以通过自然语言和语音控制服务器。
 
 ## 功能特性
 
-- **Mesh 网络集成**: 连接到 Headscale 服务器并加入基于 WireGuard 的 Mesh 网络
-- **SSH 服务器**: 通过 Mesh 网络提供安全的 SSH 访问（端口 2222）
-- **WebSocket SSH 代理**: 内置 WebSocket 到 SSH 的代理，供移动应用使用（端口 8022）
-- **gRPC 接口**: 通过 gRPC-Web 暴露设备信息和配对功能（端口 50052）
+- **WebSocket SSH 代理**: 为移动应用提供 WebSocket 到 SSH 的实时代理（端口 8022）
+- **SSH 服务器**: 提供安全的 SSH 访问（端口 2222）
+- **设备发现**: 通过 mDNS 在局域网内自动广播设备信息
+- **HTTP API**: 提供设备信息和配对功能的 HTTP 接口
+- **gRPC 接口**: 通过 gRPC 暴露设备信息和配对功能（端口 50052）
 - **跨平台**: 可在 Windows、macOS 和 Linux 上作为系统服务运行
-- **自动重连**: 如果网络连接丢失，自动重新连接到 Headscale
 - **集成架构**: 所有服务集成在一个二进制文件中 - 无需单独的代理服务器
+- **Mesh 网络支持**: 支持连接到 Headscale 服务器（开发中）
 
 ## 系统要求
 
 - Go 1.21 或更高版本
-- 系统已安装 WireGuard
-- 可访问 Headscale 服务器
+- （可选）系统已安装 WireGuard（用于 Mesh 网络功能）
+- （可选）可访问 Headscale 服务器（用于跨网访问）
+
+## 使用场景
+
+### 本地网络使用（推荐）
+- 家庭网络内管理 NAS、树莓派
+- 办公室内访问开发服务器
+- 同一局域网的设备管理
+- 通过移动端 AI 助手进行自然语言控制
+
+### 跨网访问（开发中）
+- 需要配置 Headscale 服务器
+- 建立 WireGuard Mesh 网络
+- 从任何地方访问你的设备
 
 ## 安装
 
@@ -83,16 +97,18 @@ users:
 
 ### 配置选项说明
 
-- **headscale.url**: Headscale 服务器的 URL
+- **headscale.url**: Headscale 服务器的 URL（可选，用于跨网访问）
 - **headscale.preauth_key**: Headscale 的预认证密钥（使用 `headscale preauthkeys create` 生成）
 - **ssh.port**: SSH 服务器端口（默认：2222）
 - **ssh.host_key_path**: SSH 主机密钥文件路径
-- **ssh.allowed_networks**: 允许连接的网络（开发环境使用 0.0.0.0/0）
+- **ssh.allowed_networks**: 允许连接的网络（局域网使用推荐 0.0.0.0/0）
 - **websocket.listen_addr**: WebSocket SSH 代理监听地址（默认：0.0.0.0:8022）
 - **grpc.port**: gRPC 服务器端口（默认：50051）
 - **grpc.tls_enabled**: 是否为 gRPC 连接启用 TLS
 - **device.name**: 设备名称（在移动应用中显示）
 - **users**: SSH 认证的用户名到密码的映射
+
+**注意**: 对于本地网络使用，只需配置 SSH 和 WebSocket 部分即可，无需配置 Headscale。
 
 ## 使用方法
 
@@ -281,20 +297,30 @@ GOOS=windows GOARCH=amd64 go build -o shadowd.exe
 
 ## 服务说明
 
-Shadowd 提供以下服务：
+Shadowd 提供以下服务，支持移动端 AI 助手进行自然语言控制：
 
-### SSH 服务器（端口 2222）
-- 安全的 Shell 访问
-- 密码认证
-- 支持交互式会话的 PTY
-- 仅接受来自允许网络的连接
-
-### WebSocket SSH 代理（端口 8022）
+### WebSocket SSH 代理（端口 8022）⭐ 核心服务
 - WebSocket 到 SSH 协议转换
-- 实时双向通信
+- 实时双向通信，支持 AI 命令执行
 - 支持密码和私钥认证
 - 终端大小调整支持
 - 详见 [WEBSOCKET_SSH_GUIDE.md](WEBSOCKET_SSH_GUIDE.md)
+
+### SSH 服务器（端口 2222）
+- 安全的 Shell 访问
+- 密码认证（密钥认证规划中）
+- 支持交互式会话的 PTY
+- 仅接受来自允许网络的连接
+
+### 设备发现（mDNS）
+- 局域网内自动广播设备信息
+- 移动应用自动发现可用设备
+- 无需手动输入 IP 地址
+
+### HTTP API
+- 提供设备信息查询
+- 支持 QR 码配对
+- RESTful 接口设计
 
 ### gRPC API（端口 50052）
 
@@ -308,10 +334,17 @@ Shadowd 提供以下服务：
 
 ## 安全性
 
-- SSH 连接仅使用基于密钥的认证（密码认证已禁用）
-- 仅接受来自 Mesh 网络内的连接
-- 所有通信使用 WireGuard 加密
+### 当前实现
+- SSH 连接支持密码认证
+- WebSocket 加密传输
 - 配置文件应具有受限权限（0600）
+- 可配置允许连接的网络范围
+
+### 规划中
+- 基于密钥的 SSH 认证（密码认证将被禁用）
+- 所有通信使用 WireGuard 加密（Mesh 网络）
+- 仅接受来自 Mesh 网络内的连接
+- 审计日志和访问控制
 
 ## 故障排除
 

@@ -68,6 +68,19 @@ headscale/data/*.key
 *.tmp
 *.temp
 
+# Temporary documentation (task completion reports, progress updates, etc.)
+**/TASK_*.md
+**/PHASE_*.md
+**/*COMPLETION*.md
+**/*PROGRESS*.md
+**/*SUMMARY*.md
+**/*REMAINING*.md
+**/*DELIVERY*.md
+**/*FINAL*.md
+**/*REFACTORING*.md
+**/SETUP_GUIDE.md
+**/IMPLEMENTATION.md
+
 # Environment
 .env
 .env.local

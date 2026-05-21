@@ -153,36 +153,12 @@ const DocsPage: React.FC<DocsPageProps> = ({
               </h3>
               <nav className="space-y-1">
                 <a
-                  href="/README.md"
+                  href={GITHUB_REPO}
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`block px-3 py-2 text-sm rounded-md transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'}`}
                 >
-                  {lang === 'zh' ? '项目 README' : 'Project README'}
-                </a>
-                <a
-                  href="/QUICK_START.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`block px-3 py-2 text-sm rounded-md transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'}`}
-                >
-                  {lang === 'zh' ? '快速开始指南' : 'Quick Start Guide'}
-                </a>
-                <a
-                  href="/docs/CROSS_NETWORK_SETUP.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`block px-3 py-2 text-sm rounded-md transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'}`}
-                >
-                  {lang === 'zh' ? '跨网访问设置' : 'Cross-Network Setup'}
-                </a>
-                <a
-                  href="/DEPLOYMENT.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`block px-3 py-2 text-sm rounded-md transition-colors ${theme === 'dark' ? 'text-slate-300 hover:bg-slate-800 hover:text-white' : 'text-gray-700 hover:bg-gray-200 hover:text-gray-900'}`}
-                >
-                  {lang === 'zh' ? '部署文档' : 'Deployment Guide'}
+                  GitHub 仓库
                 </a>
               </nav>
             </div>
@@ -217,15 +193,6 @@ const DocsPage: React.FC<DocsPageProps> = ({
                 <p className={`text-base leading-relaxed whitespace-pre-line mb-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-700'}`}>
                   {t.docs.localSetup.steps}
                 </p>
-                <a
-                  href="/QUICK_START.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-blue-500 hover:text-blue-600 hover:underline transition-colors"
-                >
-                  查看详细指南
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                </a>
               </div>
             </section>
 
@@ -238,15 +205,6 @@ const DocsPage: React.FC<DocsPageProps> = ({
                 <p className={`text-base leading-relaxed whitespace-pre-line mb-4 ${theme === 'dark' ? 'text-slate-300' : 'text-gray-700'}`}>
                   {t.docs.remoteSetup.steps}
                 </p>
-                <a
-                  href="/docs/CROSS_NETWORK_SETUP.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-sm text-blue-500 hover:text-blue-600 hover:underline transition-colors"
-                >
-                  查看详细指南
-                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
-                </a>
               </div>
             </section>
 

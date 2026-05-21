@@ -13,7 +13,8 @@ import {
   useColorScheme,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { colors, typography, spacing, borderRadius, shadows, getThemeColors } from '../styles/theme';
+import { colors, typography, spacing, borderRadius, shadows } from '../styles/theme';
+import { useTheme } from '../hooks/useTheme';
 
 interface StatCardProps {
   title: string;
@@ -28,8 +29,7 @@ export const StatCard: React.FC<StatCardProps> = ({
   icon,
   iconColor,
 }) => {
-  const isDarkMode = true; // 强制 Dark 模式
-  const themeColors = getThemeColors(isDarkMode);
+  const themeColors = useTheme();
 
   return (
     <View style={[

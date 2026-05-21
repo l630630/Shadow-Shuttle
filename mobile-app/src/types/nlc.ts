@@ -31,13 +31,23 @@ export interface ServiceStatus {
 
 // ============================================================================
 // Command Context Types
+// 远程机器上下文（自动采集的实时状态）
 // ============================================================================
+
+export interface RemoteContext {
+  pwd: string;        // 当前工作目录
+  whoami: string;     // 当前用户
+  hostname: string;   // 主机名
+  uname: string;      // 操作系统信息
+  dfSummary: string;  // 磁盘使用摘要
+}
 
 export interface CommandContext {
   currentDirectory: string;
   deviceInfo: DeviceInfo;
   recentCommands: string[];
   conversationHistory: Message[];
+  remoteContext?: RemoteContext;  // 远程机器实时状态（可选）
 }
 
 export interface DeviceInfo {
@@ -228,7 +238,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   metadata?: MessageMetadata;
-  type?: 'text' | 'command' | 'warning';
+  type?: 'text' | 'command' | 'warning' | 'agent_plan' | 'agent_step';
   image?: string;
 }
 
@@ -237,9 +247,40 @@ export interface MessageMetadata {
   executionResult?: ExecutionResult;
   isConfirmed?: boolean;
   isDangerous?: boolean;
-  requiresConfirmation?: boolean; // ✨ 新增
-  riskLevel?: RiskLevel; // ✨ 新增
+  requiresConfirmation?: boolean;
+  riskLevel?: RiskLevel;
   context?: CommandContext;
+
+  // Agent 模式字段
+  agentPlan?: AgentPlanMeta;
+  currentStepIndex?: number;
+  stepResults?: AgentStepResultMeta[];
+  isAgentMode?: boolean;
+  agentStatus?: 'planning' | 'executing' | 'waiting_confirmation' | 'completed' | 'aborted';
+}
+
+/** Agent 计划元数据（用于 UI 渲染） */
+export interface AgentPlanMeta {
+  thought: string;
+  steps: AgentStepMeta[];
+  completionCriteria: string;
+  summary?: string;
+}
+
+export interface AgentStepMeta {
+  id: string;
+  command: string;
+  explanation: string;
+  riskLevel: RiskLevel;
+  requiresConfirmation: boolean;
+}
+
+export interface AgentStepResultMeta {
+  stepId: string;
+  command: string;
+  output: string;
+  success: boolean;
+  exitCode: number;
 }
 
 export interface Conversation {
@@ -260,7 +301,8 @@ export interface AppSettings {
   aiProvider: AIProvider;
   aiTimeout: number;
   aiMaxTokens: number;
-  
+  agentModeEnabled: boolean;  // 是否启用 Agent 多步执行模式
+
   // 隐私设置
   privacyFilterEnabled: boolean;
   
